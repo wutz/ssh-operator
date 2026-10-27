@@ -1,0 +1,24 @@
+apiVersion: forgeai.wutz.dev/v1alpha1
+kind: SSHGateway
+metadata:
+  labels:
+    app.kubernetes.io/name: ssh-operator
+    app.kubernetes.io/managed-by: kustomize
+  # Gateways are served in the platform namespace only, and it is served by one
+  # gateway: a second one there is rejected as Invalid.
+  name: main
+  namespace: forgeai-system
+spec:
+  gatewayClassName: forgeai-ssh
+  listeners:
+    - name: ssh
+      # The port sshpiperd listens on; the Service exposes the same port.
+      port: 2222
+      allowedRoutes:
+        # Routes of every namespace may attach; the platform namespace is the
+        # default when allowedRoutes is omitted.
+        namespaces:
+          from: All
+  # ClusterIP keeps the gateway inside the cluster. The platform Ingress exposes
+  # it as a TCP service on its 7443 TLS port; LoadBalancer suits cloud clusters.
+  serviceType: ClusterIP

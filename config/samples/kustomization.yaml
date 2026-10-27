@@ -1,0 +1,6 @@
+## Append samples of your project ##
+resources:
+- forgeai_v1alpha1_sshgateway.yaml
+- forgeai_v1alpha1_sshroute.yaml
+- forgeai_v1alpha1_sshgatewayclass.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
