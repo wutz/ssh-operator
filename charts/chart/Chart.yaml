@@ -1,0 +1,20 @@
+apiVersion: v2
+name: ssh-operator
+description: Kubernetes operator that serves SSH gateways (sshpiperd) in front of sandboxes
+type: application
+
+version: 0.1.0
+appVersion: "0.1.0"
+
+home: https://github.com/wutz/ssh-operator
+sources:
+  - https://github.com/wutz/ssh-operator
+keywords:
+  - kubernetes
+  - operator
+  - ssh
+  - gateway
+
+annotations:
+  kubebuilder.io/generated-by: kubebuilder
+  artifacthub.io/license: Apache-2.0

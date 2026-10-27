@@ -1,0 +1,26 @@
+apiVersion: forgeai.wutz.dev/v1alpha1
+kind: SSHRoute
+metadata:
+  labels:
+    app.kubernetes.io/name: ssh-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: agent-login
+  # The namespace of the project whose sandbox this route reaches.
+  namespace: forge-demo
+spec:
+  parentRefs:
+    # The gateway of the platform namespace.
+    - name: main
+  rules:
+    - matches:
+        # The login name clients use. A name is claimed by the first route that
+        # matches it, so keep it unique across the cluster.
+        - username: alice
+      # The public keys allowed to log in as alice. Only key authentication is
+      # accepted: there is no password.
+      authorizedKeys:
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyReplaceMeWithYourOwnKeyExample alice@example.com
+      backendRefs:
+        # The sandbox of the namespace; the operator resolves it to the SSH
+        # Service of the sandbox's pod.
+        - name: agent

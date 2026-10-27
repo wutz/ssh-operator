@@ -1,0 +1,154 @@
+name: Release
+
+# Publishes the ssh-operator image and its Helm chart for a
+# v<major>.<minor>.<patch> tag:
+#   ghcr.io/wutz/ssh-operator:<version>
+#   oci://ghcr.io/wutz/charts/ssh-operator:<version>
+# The chart's default image is the one above.
+#
+# A manual run (workflow_dispatch) publishes the version typed in, from main,
+# without moving a tag. It is for publishing a version whose tag's own run
+# failed.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, MAJOR.MINOR.PATCH, from main"
+        required: true
+        type: string
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  image:
+    name: Publish the operator image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Resolve version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          # A manual run publishes the version typed in, and only from main.
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Manual runs publish from main, not $GITHUB_REF" >&2; exit 1; }
+            version="$INPUT_VERSION"
+          else
+            version="${REF_NAME#v}"
+          fi
+          # The chart and image tags are plain semantic versions.
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version $version is not of the form MAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+
+      # The prebuilt binary, not go install: ko v0.19.1 needs a newer Go than
+      # the runner's toolchain, and GOTOOLCHAIN=local forbids fetching one.
+      - name: Install ko
+        env:
+          KO_VERSION: 0.19.1
+        run: |
+          dir="$(mktemp -d)"
+          cd "$dir"
+          base="https://github.com/ko-build/ko/releases/download/v${KO_VERSION}"
+          archive="ko_${KO_VERSION}_Linux_x86_64.tar.gz"
+          curl -fsSLO "$base/$archive"
+          curl -fsSLO "$base/checksums.txt"
+          grep " $archive\$" checksums.txt | sha256sum -c -
+          tar -xzf "$archive" ko
+          sudo install -m 0755 ko /usr/local/bin/ko
+          ko version
+
+      - name: Log in to ghcr.io
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GITHUB_TOKEN" | ko login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      # --bare pushes to KO_DOCKER_REPO itself, so the image is ghcr.io/wutz/ssh-operator.
+      - name: Build and push the image
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          KO_DOCKER_REPO: ghcr.io/wutz/ssh-operator
+        run: ko build --bare --sbom=none --platform=linux/amd64,linux/arm64 --tags "$VERSION" ./cmd
+
+  chart:
+    name: Publish the Helm chart
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Resolve version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          # A manual run publishes the version typed in, and only from main.
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Manual runs publish from main, not $GITHUB_REF" >&2; exit 1; }
+            version="$INPUT_VERSION"
+          else
+            version="${REF_NAME#v}"
+          fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version $version is not of the form MAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install Helm
+        run: make install-helm
+
+      - name: Lint the chart
+        run: make helm-lint
+
+      - name: Package the chart
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: make helm-package CHART_VERSION="$VERSION"
+
+      - name: Log in to ghcr.io
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GITHUB_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Push the chart
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: make helm-push CHART_VERSION="$VERSION"
