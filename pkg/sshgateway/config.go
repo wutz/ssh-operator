@@ -2,21 +2,22 @@ package sshgateway
 
 import (
 	"cmp"
-	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	"github.com/wutz/sshgateway/internal/naming"
+	"sigs.k8s.io/yaml"
 )
 
-// PipeGVK is the sshpiper Pipe kind, served by the sshpiper kubernetes plugin.
-var PipeGVK = schema.GroupVersionKind{Group: "sshpiper.com", Version: "v1beta1", Kind: "Pipe"}
+// ConfigKey is the key of the sshpiper configuration in the ConfigMap of a gateway.
+const ConfigKey = "sshpiperd.yaml"
+
+// ConfigVersion is the version of the configuration format of sshpiper's yaml
+// plugin.
+const ConfigVersion = "1.0"
 
 // Reasons of a route that cannot be served. They are the reasons of the
 // Accepted and ResolvedRefs conditions of the route.
@@ -56,17 +57,48 @@ type Problem struct {
 	Message string
 }
 
-// Plan is the desired state of one gateway: its Pipes and the problems of the
-// routes left out of them, keyed by "namespace/name".
+// Config is the configuration of sshpiper's yaml plugin: the routing table of a
+// gateway. The plugin reads it on every connection.
+type Config struct {
+	Version string       `json:"version"`
+	Pipes   []ConfigPipe `json:"pipes"`
+}
+
+// ConfigPipe admits the logins of its From entries and forwards them to To.
+type ConfigPipe struct {
+	From []ConfigFrom `json:"from"`
+	To   ConfigTo     `json:"to"`
+}
+
+// ConfigFrom admits one client username with the keys that may log in as it.
+type ConfigFrom struct {
+	Username string `json:"username"`
+	// AuthorizedKeysData is the base64 of the authorized_keys the username accepts.
+	AuthorizedKeysData string `json:"authorized_keys_data"`
+}
+
+// ConfigTo is the backend a login is forwarded to.
+type ConfigTo struct {
+	Host     string `json:"host"`
+	Username string `json:"username"`
+	// KnownHostsData is the base64 of the known_hosts line that pins the host key of the backend.
+	KnownHostsData string `json:"known_hosts_data"`
+	// PrivateKey is the file of the key the gateway logs in to the backend with.
+	PrivateKey string `json:"private_key"`
+}
+
+// Plan is the desired state of one gateway: its configuration and the problems
+// of the routes left out of it, keyed by "namespace/name".
 type Plan struct {
-	Pipes    []*unstructured.Unstructured
+	Config   Config
 	Problems map[string]Problem
 }
 
-// Build plans the Pipes of a gateway in namespace from its routes. A route is
-// served only if all its rules are: any problem rejects the whole route.
-func Build(namespace, gateway string, routes []Route) Plan {
-	plan := Plan{Problems: map[string]Problem{}}
+// Build plans the configuration of a gateway from its routes. privateKey is the
+// file the gateway logs in to backends with. A route is served only if all its
+// rules are: any problem rejects the whole route.
+func Build(privateKey string, routes []Route) Plan {
+	plan := Plan{Config: Config{Version: ConfigVersion, Pipes: []ConfigPipe{}}, Problems: map[string]Problem{}}
 	ordered := slices.Clone(routes)
 	slices.SortStableFunc(ordered, func(a, b Route) int {
 		return cmp.Or(a.Created.Compare(b.Created), strings.Compare(key(a), key(b)))
@@ -83,11 +115,16 @@ func Build(namespace, gateway string, routes []Route) Plan {
 				claimed[u] = true
 			}
 		}
-		for i, rule := range route.Rules {
-			plan.Pipes = append(plan.Pipes, pipe(namespace, gateway, route, i, rule))
+		for _, rule := range route.Rules {
+			plan.Config.Pipes = append(plan.Config.Pipes, pipe(rule, privateKey))
 		}
 	}
 	return plan
+}
+
+// Marshal returns the configuration as the YAML file sshpiper's yaml plugin reads.
+func (c Config) Marshal() ([]byte, error) {
+	return yaml.Marshal(c)
 }
 
 // check returns the problem of a route, if any, given the usernames already
@@ -118,59 +155,27 @@ func check(route Route, claimed map[string]bool) (Problem, bool) {
 
 func key(route Route) string { return route.Namespace + "/" + route.Name }
 
-// PipeName is the name of the Pipe of a rule of a route. Names that would
-// exceed the length limit of object names are hashed.
-func PipeName(namespace, route string, rule int) string {
-	name := fmt.Sprintf("%s.%s.%d", namespace, route, rule)
-	if len(name) <= 253 {
-		return name
-	}
-	sum := sha256.Sum256([]byte(name))
-	return fmt.Sprintf("ssh-%x", sum[:16])
-}
-
-func pipe(namespace, gateway string, route Route, index int, rule Rule) *unstructured.Unstructured {
-	froms := make([]any, 0, len(rule.Usernames))
+// pipe is the configuration of one rule of a route.
+func pipe(rule Rule, privateKey string) ConfigPipe {
 	keys := make([]string, 0, len(rule.AuthorizedKeys))
 	for _, k := range rule.AuthorizedKeys {
 		// Keys were checked by check, so this cannot fail.
 		canonical, _ := NormalizeAuthorizedKey(k)
 		keys = append(keys, canonical)
 	}
+	authorized := base64.StdEncoding.EncodeToString([]byte(strings.Join(keys, "\n") + "\n"))
+
+	froms := make([]ConfigFrom, 0, len(rule.Usernames))
 	for _, u := range rule.Usernames {
-		froms = append(froms, map[string]any{
-			"username":             u,
-			"authorized_keys_data": strings.Join(keys, "\n"),
-		})
+		froms = append(froms, ConfigFrom{Username: u, AuthorizedKeysData: authorized})
 	}
-	obj := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": PipeGVK.GroupVersion().String(),
-		"kind":       PipeGVK.Kind,
-		"metadata": map[string]any{
-			"name":      PipeName(route.Namespace, route.Name, index),
-			"namespace": namespace,
-			"labels": map[string]any{
-				naming.LabelManagedBy:  naming.ManagedBy,
-				naming.LabelSSHGateway: gateway,
-			},
-			"annotations": map[string]any{
-				naming.AnnotationSSHRoute: key(route),
-				naming.AnnotationSSHRule:  fmt.Sprint(index),
-				// The identity key has no certificate, so sshpiper must not look for one.
-				"sshpiper.com/no_ca_publickey": naming.LiteralTrue,
-			},
+	return ConfigPipe{
+		From: froms,
+		To: ConfigTo{
+			Host:           rule.Backend,
+			Username:       rule.BackendUser,
+			KnownHostsData: KnownHostsData(rule.Backend, rule.HostKey),
+			PrivateKey:     privateKey,
 		},
-		"spec": map[string]any{
-			"from": froms,
-			"to": map[string]any{
-				"host":             rule.Backend,
-				"username":         rule.BackendUser,
-				"known_hosts_data": KnownHostsData(rule.Backend, rule.HostKey),
-				"private_key_secret": map[string]any{
-					"name": naming.SSHIdentitySecretName,
-				},
-			},
-		},
-	}}
-	return obj
+	}
 }

@@ -23,9 +23,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -48,23 +46,33 @@ const sshPortName = "ssh"
 // names none.
 const sshPort = 22
 
-// sshpiperPluginPath runs the kubernetes plugin of sshpiper, which serves the
-// Pipes of the namespace its ServiceAccount runs in. The image keeps the plugin
-// off PATH, so it is named by its path.
-const sshpiperPluginPath = "/sshpiperd/plugins/kubernetes"
+// sshpiperPluginPath runs the yaml plugin of sshpiper, which routes logins by
+// the config file it is given. The image keeps the plugin off PATH, so it is
+// named by its path. The yaml plugin ships in the "full" image.
+const sshpiperPluginPath = "/sshpiperd/plugins/yaml"
 
 const (
 	// sshpiperServerKeyDir is where the gateway's host key is mounted.
 	sshpiperServerKeyDir = "/etc/sshpiper"
-	// sshpiperUID runs sshpiper without root. The host key is group-readable
-	// through the fsGroup, so this user can read it.
+	// sshpiperConfigDir is where the routing table is mounted.
+	sshpiperConfigDir = "/etc/sshgateway/config"
+	// sshpiperIdentityDir is where the platform identity key is mounted. The
+	// gateway logs in to backends with it.
+	sshpiperIdentityDir = "/etc/sshgateway/identity"
+	// sshpiperUID runs sshpiper without root. The mounted files are
+	// group-readable through the fsGroup, so this user can read them.
 	sshpiperUID int64 = 65532
-	// sshpiperConfigVolume is the volume holding the host key.
-	sshpiperConfigVolume = "server-key"
+
+	sshpiperServerKeyVolume = "server-key"
+	sshpiperConfigVolume    = "config"
+	sshpiperIdentityVolume  = "identity"
 )
 
-// SSHGatewayReconciler serves an SSHGateway with sshpiper. The Pipes it writes
-// are sshpiper's routing table, one per rule of each attached SSHRoute.
+// sshpiperIdentityFile is the file of the platform identity key in sshpiperIdentityDir.
+const sshpiperIdentityFile = sshPrivateKeyKey
+
+// SSHGatewayReconciler serves an SSHGateway with sshpiper. The configuration it
+// writes is sshpiper's routing table, one pipe per rule of each attached SSHRoute.
 type SSHGatewayReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -80,14 +88,12 @@ type SSHGatewayReconciler struct {
 // +kubebuilder:rbac:groups=sshgateway.wutz.dev,resources=sshgateways/finalizers,verbs=update
 // +kubebuilder:rbac:groups=sshgateway.wutz.dev,resources=sshgatewayclasses,verbs=get;list;watch
 // +kubebuilder:rbac:groups=sshgateway.wutz.dev,resources=sshroutes,verbs=get;list;watch
-// +kubebuilder:rbac:groups=sshpiper.com,resources=pipes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=services;serviceaccounts;secrets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services;secrets;configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 
 // Reconcile serves the SSHGateway if it is the one of the gateway namespace,
-// and writes the Deployment, Service and Pipes that serve it.
+// and writes the Deployment, Service and ConfigMap that serve it.
 func (r *SSHGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	gw := &v1alpha1.SSHGateway{}
 	if err := r.Get(ctx, req.NamespacedName, gw); err != nil {
@@ -142,6 +148,10 @@ func (r *SSHGatewayReconciler) program(ctx context.Context, gw *v1alpha1.SSHGate
 	if err != nil {
 		return err
 	}
+	config, err := plan.Config.Marshal()
+	if err != nil {
+		return err
+	}
 
 	name := naming.SSHGatewayName(gw.Name)
 	hostKey, err := r.ensureHostKey(ctx, gw, naming.SSHHostKeySecret(name))
@@ -153,10 +163,8 @@ func (r *SSHGatewayReconciler) program(ctx context.Context, gw *v1alpha1.SSHGate
 	}
 
 	objs := []client.Object{
-		sshpiperServiceAccount(gw, name),
-		sshpiperRole(gw, name),
-		sshpiperRoleBinding(gw, name),
 		sshpiperService(gw, name, listener.Port),
+		sshpiperConfigMap(gw, name, config),
 		sshpiperDeployment(gw, name, r.GatewayImage, listener.Port, hostKey.Name),
 	}
 	for _, obj := range objs {
@@ -166,20 +174,6 @@ func (r *SSHGatewayReconciler) program(ctx context.Context, gw *v1alpha1.SSHGate
 		if err := apply(ctx, r.Client, obj); err != nil {
 			return err
 		}
-	}
-
-	keep := map[string]bool{}
-	for _, p := range plan.Pipes {
-		if err := controllerutil.SetControllerReference(gw, p, r.Scheme); err != nil {
-			return err
-		}
-		if err := apply(ctx, r.Client, p); err != nil {
-			return err
-		}
-		keep[p.GetName()] = true
-	}
-	if err := r.prunePipes(ctx, gw, keep); err != nil {
-		return err
 	}
 
 	deploy := &appsv1.Deployment{}
@@ -204,7 +198,7 @@ func (r *SSHGatewayReconciler) program(ctx context.Context, gw *v1alpha1.SSHGate
 		setSSHCondition(&gw.Status.Conditions, gen, v1alpha1.SSHConditionReady, metav1.ConditionFalse,
 			v1alpha1.SSHReasonNotReady, "sshpiper has no available replica")
 	}
-	log.V(1).Info("Programmed SSHGateway", "sshgateway", gw.Name, "pipes", len(plan.Pipes), "routes", attached)
+	log.V(1).Info("Programmed SSHGateway", "sshgateway", gw.Name, "pipes", len(plan.Config.Pipes), "routes", attached)
 	return nil
 }
 
@@ -246,28 +240,6 @@ func (r *SSHGatewayReconciler) ensureHostKey(ctx context.Context, gw *v1alpha1.S
 	return sec, nil
 }
 
-// prunePipes deletes the Pipes of gw that no longer match a rule of a route.
-func (r *SSHGatewayReconciler) prunePipes(ctx context.Context, gw *v1alpha1.SSHGateway, keep map[string]bool) error {
-	list := &unstructured.UnstructuredList{}
-	list.SetGroupVersionKind(sshgateway.PipeGVK.GroupVersion().WithKind(sshgateway.PipeGVK.Kind + "List"))
-	if err := r.List(ctx, list, client.InNamespace(gw.Namespace), client.MatchingLabels{
-		naming.LabelManagedBy:  naming.ManagedBy,
-		naming.LabelSSHGateway: gw.Name,
-	}); err != nil {
-		return err
-	}
-	for i := range list.Items {
-		p := &list.Items[i]
-		if keep[p.GetName()] || !metav1.IsControlledBy(p, gw) {
-			continue
-		}
-		if err := r.Delete(ctx, p); client.IgnoreNotFound(err) != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // addresses are the host:port the gateway's Service is reachable at.
 func (r *SSHGatewayReconciler) addresses(ctx context.Context, gw *v1alpha1.SSHGateway, name string, port int32) ([]string, error) {
 	svc := &corev1.Service{}
@@ -291,8 +263,6 @@ func (r *SSHGatewayReconciler) addresses(ctx context.Context, gw *v1alpha1.SSHGa
 // are planned from: routes, classes, backend Services and host key Secrets, and
 // namespace labels.
 func (r *SSHGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	pipe := &unstructured.Unstructured{}
-	pipe.SetGroupVersionKind(sshgateway.PipeGVK)
 	all := func(ctx context.Context, _ client.Object) []reconcile.Request {
 		return gatewayRequests(ctx, mgr.GetClient())
 	}
@@ -310,7 +280,7 @@ func (r *SSHGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.Secret{}).
-		Owns(pipe).
+		Owns(&corev1.ConfigMap{}).
 		Watches(&v1alpha1.SSHGateway{}, handler.EnqueueRequestsFromMapFunc(all)).
 		Watches(&v1alpha1.SSHGatewayClass{}, handler.EnqueueRequestsFromMapFunc(all)).
 		Watches(&v1alpha1.SSHRoute{}, handler.EnqueueRequestsFromMapFunc(all)).
@@ -337,39 +307,6 @@ func sshpiperLabels(gw *v1alpha1.SSHGateway) map[string]string {
 	}
 }
 
-func sshpiperServiceAccount(gw *v1alpha1.SSHGateway, name string) *corev1.ServiceAccount {
-	return &corev1.ServiceAccount{ObjectMeta: sshpiperMeta(gw, name)}
-}
-
-// sshpiperRole lets the kubernetes plugin list the Pipes and read the platform
-// identity key, and nothing else.
-func sshpiperRole(gw *v1alpha1.SSHGateway, name string) *rbacv1.Role {
-	return &rbacv1.Role{
-		ObjectMeta: sshpiperMeta(gw, name),
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{sshgateway.PipeGVK.Group},
-				Resources: []string{"pipes"},
-				Verbs:     []string{"get", "list", "watch"},
-			},
-			{
-				APIGroups:     []string{""},
-				Resources:     []string{"secrets"},
-				ResourceNames: []string{naming.SSHIdentitySecretName},
-				Verbs:         []string{"get"},
-			},
-		},
-	}
-}
-
-func sshpiperRoleBinding(gw *v1alpha1.SSHGateway, name string) *rbacv1.RoleBinding {
-	return &rbacv1.RoleBinding{
-		ObjectMeta: sshpiperMeta(gw, name),
-		RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: name},
-		Subjects:   []rbacv1.Subject{{Kind: rbacv1.ServiceAccountKind, Name: name, Namespace: gw.Namespace}},
-	}
-}
-
 func sshpiperService(gw *v1alpha1.SSHGateway, name string, port int32) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: sshpiperMeta(gw, name),
@@ -386,8 +323,18 @@ func sshpiperService(gw *v1alpha1.SSHGateway, name string, port int32) *corev1.S
 	}
 }
 
-// sshpiperDeployment runs sshpiper with the kubernetes plugin, which serves the
-// Pipes of its own namespace. It runs unprivileged, without forwarding.
+// sshpiperConfigMap holds the routing table of gw: the sshpiper configuration
+// the yaml plugin reads on every connection.
+func sshpiperConfigMap(gw *v1alpha1.SSHGateway, name string, config []byte) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: sshpiperMeta(gw, name),
+		Data:       map[string]string{sshgateway.ConfigKey: string(config)},
+	}
+}
+
+// sshpiperDeployment runs sshpiper with the yaml plugin, which routes logins by
+// the ConfigMap of the gateway. It runs unprivileged, without forwarding, and
+// has no API access: it reads only its mounted files.
 func sshpiperDeployment(gw *v1alpha1.SSHGateway, name, image string, port int32, hostKeySecret string) *appsv1.Deployment {
 	labels := sshpiperLabels(gw)
 	return &appsv1.Deployment{
@@ -398,7 +345,7 @@ func sshpiperDeployment(gw *v1alpha1.SSHGateway, name, image string, port int32,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: name,
+					AutomountServiceAccountToken: new(false),
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: new(true),
 						RunAsUser:    new(sshpiperUID),
@@ -414,25 +361,49 @@ func sshpiperDeployment(gw *v1alpha1.SSHGateway, name, image string, port int32,
 							"--disable-remote-forwarding",
 							"--log-level", "info",
 							sshpiperPluginPath,
+							"--config", sshpiperConfigDir + "/" + sshgateway.ConfigKey,
+							// The config is a read-only mount that the fsGroup makes
+							// group-readable, which the plugin's 0400 check refuses.
+							"--no-check-perm",
 						},
 						Ports: []corev1.ContainerPort{{Name: sshPortName, ContainerPort: port, Protocol: corev1.ProtocolTCP}},
-						VolumeMounts: []corev1.VolumeMount{{
-							Name:      sshpiperConfigVolume,
-							MountPath: sshpiperServerKeyDir,
-							ReadOnly:  true,
-						}},
+						VolumeMounts: []corev1.VolumeMount{
+							{Name: sshpiperServerKeyVolume, MountPath: sshpiperServerKeyDir, ReadOnly: true},
+							{Name: sshpiperConfigVolume, MountPath: sshpiperConfigDir, ReadOnly: true},
+							{Name: sshpiperIdentityVolume, MountPath: sshpiperIdentityDir, ReadOnly: true},
+						},
 						SecurityContext: &corev1.SecurityContext{
 							AllowPrivilegeEscalation: new(false),
 							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
 						},
 					}},
-					Volumes: []corev1.Volume{{
-						Name: sshpiperConfigVolume,
-						VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
-							SecretName:  hostKeySecret,
-							DefaultMode: new(int32(0o440)),
-						}},
-					}},
+					Volumes: []corev1.Volume{
+						{
+							Name: sshpiperServerKeyVolume,
+							VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+								SecretName:  hostKeySecret,
+								DefaultMode: new(int32(0o440)),
+							}},
+						},
+						{
+							Name: sshpiperConfigVolume,
+							VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{Name: naming.SSHGatewayName(gw.Name)},
+								DefaultMode:          new(int32(0o440)),
+							}},
+						},
+						{
+							Name: sshpiperIdentityVolume,
+							VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+								SecretName:  naming.SSHIdentitySecretName,
+								DefaultMode: new(int32(0o440)),
+								Items: []corev1.KeyToPath{{
+									Key:  sshPrivateKeyKey,
+									Path: sshpiperIdentityFile,
+								}},
+							}},
+						},
+					},
 				},
 			},
 		},

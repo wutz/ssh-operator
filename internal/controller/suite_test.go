@@ -50,7 +50,7 @@ const (
 	timeout  = 30 * time.Second
 	interval = 250 * time.Millisecond
 	// testGatewayImage is the sshpiper image the specs' gateways run.
-	testGatewayImage = "ghcr.io/tg123/sshpiperd:v1.6.1"
+	testGatewayImage = "ghcr.io/tg123/sshpiperd:full-v1.6.1"
 )
 
 var (
@@ -79,8 +79,6 @@ var _ = BeforeSuite(func() {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"),
-			// The sshpiper Pipe CRD, which the gateway writes its routing table to.
-			filepath.Join("testdata", "crds"),
 		},
 		ErrorIfCRDPathMissing: true,
 	}

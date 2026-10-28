@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	v1 "github.com/wutz/sshgateway/api/v1alpha1"
 	"github.com/wutz/sshgateway/internal/naming"
@@ -87,7 +88,18 @@ var _ = Describe("SSH gateway controller", Ordered, func() {
 		args := deploy.Spec.Template.Spec.Containers[0].Args
 		// sshpiper forwards logins to backends only: no forwarding of any kind.
 		Expect(args).To(ContainElements("--disable-local-forwarding", "--disable-remote-forwarding", sshpiperPluginPath))
+		// The yaml plugin reads the routing table from the mounted ConfigMap.
+		Expect(args).To(ContainElements("--config", sshpiperConfigDir+"/"+sshgateway.ConfigKey, "--no-check-perm"))
 		Expect(deploy.Spec.Template.Spec.SecurityContext.RunAsNonRoot).To(HaveValue(BeTrue()))
+
+		cm := &corev1.ConfigMap{}
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Namespace: configNamespace, Name: name}, cm)
+		}, timeout, interval).Should(Succeed())
+		Expect(cm.Data).To(HaveKey(sshgateway.ConfigKey))
+		config := sshgateway.Config{}
+		Expect(yaml.Unmarshal([]byte(cm.Data[sshgateway.ConfigKey]), &config)).To(Succeed())
+		Expect(config.Version).To(Equal(sshgateway.ConfigVersion))
 
 		svc := &corev1.Service{}
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: configNamespace, Name: name}, svc)).To(Succeed())

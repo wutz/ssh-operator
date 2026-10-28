@@ -2,22 +2,23 @@
 
 A Kubernetes operator that serves SSH gateways in front of SSH services. An
 `SSHGateway` runs [sshpiper](https://github.com/tg123/sshpiper) in the
-cluster, and each `SSHRoute` rule becomes an sshpiper `Pipe` that admits a
+cluster, and each `SSHRoute` rule becomes a sshpiper routing entry that admits a
 username with the listed public keys and forwards the session to a backend
-Service.
+Service. The operator runs sshpiper's yaml plugin, so sshpiper needs no CRD.
 
 The API is modelled on the Gateway API: `SSHGatewayClass`, `SSHGateway` and
 `SSHRoute`. The API group is `sshgateway.wutz.dev/v1alpha1`.
 
 ## How it works
 
-- **Gateway.** Each `SSHGateway` gets a Deployment, Service, ServiceAccount,
-  Role and RoleBinding named `sshgateway-<name>`. The sshpiper host key is
-  generated once and kept in the Secret `sshgateway-<name>-hostkey`; clients
-  pin it.
-- **Routes.** Every rule of an `SSHRoute` becomes a sshpiper `Pipe` owned by
-  its gateway. The Pipe accepts the keys in `authorizedKeys` for the listed
-  usernames and forwards to the backend.
+- **Gateway.** Each `SSHGateway` gets a Deployment, Service and ConfigMap named
+  `sshgateway-<name>`. The sshpiper host key is generated once and kept in the
+  Secret `sshgateway-<name>-hostkey`; clients pin it.
+- **Routes.** Every rule of an `SSHRoute` becomes a pipe in the gateway's
+  ConfigMap, under the key `sshpiperd.yaml`. The pipe accepts the keys in
+  `authorizedKeys` for the listed usernames and forwards to the backend. sshpiper
+  reads the file on every connection, so a route change needs no restart; the
+  kubelet takes up to about a minute to project the change into the pod.
 - **Backends.** A backend is a Service in the route's namespace that exposes an
   sshd, named by `backendRefs[].name`. The port is `backendRefs[].port`
   (22 by default). The host key of the sshd is read from the Secret
@@ -37,10 +38,7 @@ key authentication is accepted; there are no passwords.
 
 ## Requirements
 
-- Kubernetes with the sshpiper `Pipe` CRD (`pipes.sshpiper.com`, v1beta1)
-  installed. The CRD is in [`internal/controller/testdata/crds/pipes.sshpiper.com.yaml`](internal/controller/testdata/crds/pipes.sshpiper.com.yaml).
-  Without it the operator starts, logs `sshpiper Pipe CRD is not installed; the
-  SSH gateway controllers are off`, and leaves gateways and routes without status.
+- Kubernetes. No CRD is needed beyond the operator's own.
 - Backends are created by the integrating platform, or by anyone else who
   runs an sshd: a backend is a Service that exposes the sshd, with its host key
   in the Secret `<service>-hostkey` and the identity key accepted for the login
@@ -63,7 +61,7 @@ Values:
 |---|---|---|
 | `manager.image.repository` | `ghcr.io/wutz/sshgateway` | Operator image |
 | `gateway.namespace` | `sshgateway-system` | Namespace the gateways are served in |
-| `gateway.image` | `ghcr.io/tg123/sshpiperd:v1.6.1` | sshpiper image of each gateway |
+| `gateway.image` | `ghcr.io/tg123/sshpiperd:full-v1.6.1` | sshpiper image of each gateway. The `full` image ships the yaml plugin the gateway runs. |
 | `crd.keep` | `true` | Keep the CRDs on uninstall |
 
 The operator's RBAC is cluster-wide (`ClusterRole`). It watches Services and
@@ -115,6 +113,20 @@ spec:
 
 Samples are in [`config/samples`](config/samples).
 
+### Upgrading from 0.2.x
+
+Version 0.4 serves gateways from a ConfigMap instead of sshpiper `Pipe` objects.
+The upgrade does not delete the objects of 0.2.x. Once the gateway serves from
+its ConfigMap, remove them in the gateway namespace (`sshgateway-system` by
+default):
+
+```bash
+kubectl delete pipes.sshpiper.com,role,rolebinding,serviceaccount -n sshgateway-system -l app.kubernetes.io/managed-by=sshgateway
+```
+
+The selector matches only the objects the operator wrote. The `Pipe` CRD is
+not removed; delete it separately only if nothing else in the cluster uses it.
+
 - A username is claimed by the first route that matches it, so keep login names
   unique across the cluster.
 - `allowedRoutes` defaults to `Same`: only routes of the gateway's namespace
@@ -128,7 +140,7 @@ Samples are in [`config/samples`](config/samples).
 | Flag | Default | Meaning |
 |---|---|---|
 | `--gateway-namespace` | `sshgateway-system` | Namespace the gateways are served in and that holds the `sshgateway-identity` identity Secret |
-| `--gateway-image` | `ghcr.io/tg123/sshpiperd:v1.6.1` | sshpiper image of each gateway |
+| `--gateway-image` | `ghcr.io/tg123/sshpiperd:full-v1.6.1` | sshpiper image of each gateway |
 | `--leader-elect` | `false` | Leader election (lease `sshgateway.wutz.dev`) |
 | `--metrics-bind-address` | `0` | Metrics endpoint; `:8443` for HTTPS |
 | `--health-probe-bind-address` | `:8081` | Health and readiness probes |

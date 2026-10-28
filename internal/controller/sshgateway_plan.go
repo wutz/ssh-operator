@@ -41,8 +41,8 @@ import (
 	"github.com/wutz/sshgateway/pkg/sshgateway"
 )
 
-// Gateways and routes are planned together. The Pipes of a gateway are the
-// routes attached to it, and the status of a route is the plan's verdict on it,
+// Gateways and routes are planned together. The configuration of a gateway is
+// the routes attached to it, and the status of a route is the plan's verdict on it,
 // so both controllers run the same functions over the same cluster state.
 
 // sshReasonResolvedRefs is the reason of a ResolvedRefs condition that holds.
@@ -160,8 +160,8 @@ func ownsClass(ctx context.Context, c client.Reader, class string) (bool, error)
 }
 
 // servedGateway is the SSHGateway that serves the gateway namespace: the first
-// created of the gateways of this controller. One sshpiper serves every Pipe
-// in its namespace, so a second gateway would also serve the first one's routes.
+// created of the gateways of this controller. One sshpiper serves the routes
+// of its namespace, so a second gateway would also serve the first one's routes.
 func servedGateway(ctx context.Context, c client.Reader, gatewayNamespace string) (*v1.SSHGateway, error) {
 	list := &v1.SSHGatewayList{}
 	if err := c.List(ctx, list, client.InNamespace(gatewayNamespace)); err != nil {
@@ -189,8 +189,8 @@ func servedGateway(ctx context.Context, c client.Reader, gatewayNamespace string
 	return nil, nil
 }
 
-// planSSHGateway plans the Pipes of gw from the SSHRoutes attached to it. It
-// also returns how many routes are attached.
+// planSSHGateway plans the configuration of gw from the SSHRoutes attached to
+// it. It also returns how many routes are attached.
 func planSSHGateway(ctx context.Context, c client.Reader, gatewayNamespace string, gw *v1.SSHGateway) (sshgateway.Plan, int32, error) {
 	routes := &v1.SSHRouteList{}
 	if err := c.List(ctx, routes); err != nil {
@@ -218,7 +218,7 @@ func planSSHGateway(ctx context.Context, c client.Reader, gatewayNamespace strin
 			Rules:     rules,
 		})
 	}
-	return sshgateway.Build(gw.Namespace, gw.Name, attached), int32(len(attached)), nil
+	return sshgateway.Build(sshpiperIdentityDir+"/"+sshpiperIdentityFile, attached), int32(len(attached)), nil
 }
 
 // attaches reports whether route attaches to the gateway key through one of its parents.
