@@ -5,7 +5,7 @@ metadata:
     app.kubernetes.io/name: sshgateway
     app.kubernetes.io/managed-by: kustomize
   name: agent-login
-  # The namespace of the project whose sandbox this route reaches.
+  # The namespace of the backend Service this route reaches.
   namespace: project-demo
 spec:
   parentRefs:
@@ -21,6 +21,8 @@ spec:
       authorizedKeys:
         - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyReplaceMeWithYourOwnKeyExample alice@example.com
       backendRefs:
-        # The sandbox of the namespace; the operator resolves it to the SSH
-        # Service of the sandbox's pod.
+        # The Service that exposes the sshd, in the namespace of the route. The
+        # Secret <name>-hostkey holds the sshd host key.
         - name: agent
+          # The account the gateway logs in to the backend as.
+          username: agent

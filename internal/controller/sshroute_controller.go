@@ -24,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -130,10 +129,14 @@ func mergeParents(existing, ours []v1alpha1.RouteParentStatus) []v1alpha1.RouteP
 }
 
 // SetupWithManager watches the routes and everything they are planned from:
-// gateways, classes, namespaces (for selectors) and sandbox backends.
+// gateways, classes, namespaces (for selectors) and the backend Services and
+// host key Secrets that routes name.
 func (r *SSHRouteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	all := func(ctx context.Context, _ client.Object) []reconcile.Request {
 		return routeRequests(ctx, mgr.GetClient())
+	}
+	backend := func(ctx context.Context, obj client.Object) []reconcile.Request {
+		return backendRequests(ctx, mgr.GetClient(), obj)
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("sshroute").
@@ -141,7 +144,7 @@ func (r *SSHRouteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&v1alpha1.SSHGateway{}, handler.EnqueueRequestsFromMapFunc(all)).
 		Watches(&v1alpha1.SSHGatewayClass{}, handler.EnqueueRequestsFromMapFunc(all)).
 		Watches(&corev1.Namespace{}, handler.EnqueueRequestsFromMapFunc(all)).
-		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(all), builder.WithPredicates(sandboxBackends())).
-		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(all), builder.WithPredicates(sandboxBackends())).
+		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(backend)).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(backend)).
 		Complete(r)
 }

@@ -23,8 +23,8 @@ spec:
       openAPIV3Schema:
         description: |-
           SSHRoute attaches SSH connections to a backend Service in its namespace,
-          modelled on the Gateway API routes. A member of a project creates one to
-          let an SSH client with one of the listed keys log in to a sandbox.
+          modelled on the Gateway API routes. It lets an SSH client with one of the
+          listed keys log in to the sshd behind the Service.
         properties:
           apiVersion:
             description: |-
@@ -95,19 +95,27 @@ spec:
                         properties:
                           name:
                             description: |-
-                              name of the Service in the route's namespace. The Secret <name>-hostkey
-                              holds the SSH host key of the sshd behind the Service; the gateway pins it.
+                              name of the Service in the route's namespace that exposes an sshd. The
+                              Secret <name>-hostkey holds the SSH host key of that sshd; the gateway pins it.
                             maxLength: 63
                             minLength: 1
                             type: string
                           port:
-                            description: port of the Service. Defaults to 22.
+                            description: port of the sshd behind the Service. Defaults
+                              to 22.
                             format: int32
                             maximum: 65535
                             minimum: 1
                             type: integer
+                          username:
+                            description: |-
+                              username is the account the gateway logs in to the backend as. The
+                              backend must accept the platform identity key for it.
+                            pattern: ^[a-z_][a-z0-9_-]{0,31}$
+                            type: string
                         required:
                         - name
+                        - username
                         type: object
                       maxItems: 1
                       minItems: 1

@@ -1,10 +1,10 @@
 # sshgateway
 
-A Kubernetes operator that serves SSH gateways in front of sandboxes. An
+A Kubernetes operator that serves SSH gateways in front of SSH services. An
 `SSHGateway` runs [sshpiper](https://github.com/tg123/sshpiper) in the
 cluster, and each `SSHRoute` rule becomes an sshpiper `Pipe` that admits a
-username with the listed public keys and forwards the session to the SSH
-Service of a sandbox.
+username with the listed public keys and forwards the session to a backend
+Service.
 
 The API is modelled on the Gateway API: `SSHGatewayClass`, `SSHGateway` and
 `SSHRoute`. The API group is `sshgateway.wutz.dev/v1alpha1`.
@@ -18,15 +18,15 @@ The API is modelled on the Gateway API: `SSHGatewayClass`, `SSHGateway` and
 - **Routes.** Every rule of an `SSHRoute` becomes a sshpiper `Pipe` owned by
   its gateway. The Pipe accepts the keys in `authorizedKeys` for the listed
   usernames and forwards to the backend.
-- **Backends.** A backend is the Service `<sandbox>-ssh` (port 22 by default)
-  of a sandbox. Only Services owned by an agent-sandbox `Sandbox` are backends.
-  The host key the sandbox presents is read from the Secret
-  `<sandbox>-ssh-hostkey` (key `ssh_host_ed25519_key`), and the gateway pins it.
-- **Login to sandboxes.** The gateway logs in to a sandbox as user `sandbox`
-  with the identity key. The Secret `sshgateway-identity` in the gateway
-  namespace holds the key pair (`ssh-privatekey`, `ssh-publickey`). The
-  operator creates it when it is missing; the sandbox must accept
-  `ssh-publickey`.
+- **Backends.** A backend is a Service in the route's namespace that exposes an
+  sshd, named by `backendRefs[].name`. The port is `backendRefs[].port`
+  (22 by default). The host key of the sshd is read from the Secret
+  `<service>-hostkey` (key `ssh_host_ed25519_key`), and the gateway pins it.
+- **Login to backends.** The gateway logs in to a backend as the account named
+  by `backendRefs[].username`, with the identity key. The Secret
+  `sshgateway-identity` in the gateway namespace holds the key pair
+  (`ssh-privatekey`, `ssh-publickey`). The operator creates it when it is
+  missing; the backend must accept `ssh-publickey` for that account.
 - **Gateway namespace.** Gateways are served in one namespace, set by
   `--gateway-namespace` (default `sshgateway-system`). Only one `SSHGateway` may
   serve it; a second one is rejected.
@@ -41,9 +41,10 @@ key authentication is accepted; there are no passwords.
   installed. The CRD is in [`internal/controller/testdata/crds/pipes.sshpiper.com.yaml`](internal/controller/testdata/crds/pipes.sshpiper.com.yaml).
   Without it the operator starts, logs `sshpiper Pipe CRD is not installed; the
   SSH gateway controllers are off`, and leaves gateways and routes without status.
-- Backends are created by the integrating platform. Its sandboxes are
-  agent-sandbox `Sandbox` objects, each with an sshd on port 22 behind the
-  `<sandbox>-ssh` Service.
+- Backends are created by the integrating platform, or by anyone else who
+  runs an sshd: a backend is a Service that exposes the sshd, with its host key
+  in the Secret `<service>-hostkey` and the identity key accepted for the login
+  account.
 
 ## Install
 
@@ -66,8 +67,8 @@ Values:
 | `crd.keep` | `true` | Keep the CRDs on uninstall |
 
 The operator's RBAC is cluster-wide (`ClusterRole`). It watches Services and
-Secrets in all namespaces to find sandbox backends and writes host-key Secrets
-in the gateway's namespace.
+Secrets in all namespaces to find the backends of routes and writes host-key
+Secrets in the gateway's namespace.
 
 ## Usage
 
@@ -109,6 +110,7 @@ spec:
         - ssh-ed25519 AAAA... alice@example.com
       backendRefs:
         - name: agent
+          username: agent
 ```
 
 Samples are in [`config/samples`](config/samples).

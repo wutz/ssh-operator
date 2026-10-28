@@ -38,8 +38,12 @@ func route(ns, name string, created time.Time, rules ...Rule) Route {
 	return Route{Namespace: ns, Name: name, Created: created, Rules: rules}
 }
 
-// testBackend is the SSH address of the backend the specs route to.
-const testBackend = "sb-ssh.project-a.svc:22"
+// testBackend is the SSH address of the backend the specs route to, and
+// testBackendUser the account they forward as on it.
+const (
+	testBackend     = "app.project-a.svc:22"
+	testBackendUser = "agent"
+)
 
 func TestBuildPipeForRule(t *testing.T) {
 	key := clientKey(t)
@@ -48,6 +52,7 @@ func TestBuildPipeForRule(t *testing.T) {
 		Usernames:      []string{"alice", "alice-ro"},
 		AuthorizedKeys: []string{key + " alice@laptop"},
 		Backend:        testBackend,
+		BackendUser:    testBackendUser,
 		HostKey:        host,
 	}
 	plan := Build("sshgateway-system", "main", []Route{route("project-a", "sb", time.Unix(1, 0), rule)})
@@ -84,12 +89,12 @@ func TestBuildPipeForRule(t *testing.T) {
 	}
 
 	to, _, _ := unstructured.NestedMap(p.Object, "spec", "to")
-	if to["host"] != testBackend || to["username"] != SandboxUser {
-		t.Errorf("to = %v, want host and sandbox user", to)
+	if to["host"] != testBackend || to["username"] != testBackendUser {
+		t.Errorf("to = %v, want host and backend user", to)
 	}
 	khData, _ := to["known_hosts_data"].(string)
 	khLine, err := base64.StdEncoding.DecodeString(khData)
-	if err != nil || !strings.HasPrefix(string(khLine), "sb-ssh.project-a.svc ssh-ed25519 ") {
+	if err != nil || !strings.HasPrefix(string(khLine), "app.project-a.svc ssh-ed25519 ") {
 		t.Errorf("known_hosts_data = %q (%v), want a base64 known_hosts line for the backend", khData, err)
 	}
 	secret, _, _ := unstructured.NestedString(to, "private_key_secret", "name")
@@ -106,12 +111,14 @@ func TestBuildOneRouteRejectsAllOnProblem(t *testing.T) {
 		Usernames:      []string{"a"},
 		AuthorizedKeys: []string{clientKey(t)},
 		Backend:        "x.ns.svc:22",
+		BackendUser:    testBackendUser,
 		HostKey:        hostKey(t),
 	}
 	badKey := Rule{
 		Usernames:      []string{"b"},
 		AuthorizedKeys: []string{`command="id" ` + clientKey(t)},
 		Backend:        "y.ns.svc:22",
+		BackendUser:    testBackendUser,
 		HostKey:        hostKey(t),
 	}
 	plan := Build("gw", "main", []Route{route("ns", "r", time.Unix(1, 0), good, badKey)})
@@ -138,8 +145,13 @@ func TestBuildBackendProblems(t *testing.T) {
 			reason: ReasonBackendNotFound,
 		},
 		{
-			name:   "no host key",
-			rule:   Rule{Usernames: []string{"a"}, AuthorizedKeys: []string{key}, Backend: "x.ns.svc:22"},
+			name: "no host key",
+			rule: Rule{
+				Usernames:      []string{"a"},
+				AuthorizedKeys: []string{key},
+				Backend:        "x.ns.svc:22",
+				BackendUser:    testBackendUser,
+			},
 			reason: ReasonHostKeyNotFound,
 		},
 	}

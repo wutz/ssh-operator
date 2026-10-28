@@ -121,8 +121,8 @@ func TestKnownHostsData(t *testing.T) {
 		addr     string
 		wantHost string
 	}{
-		{addr: testBackend, wantHost: "sb-ssh.project-a.svc"},
-		{addr: "sb-ssh.project-a.svc:2222", wantHost: "[sb-ssh.project-a.svc]:2222"},
+		{addr: testBackend, wantHost: "app.project-a.svc"},
+		{addr: "app.project-a.svc:2222", wantHost: "[app.project-a.svc]:2222"},
 	}
 	for _, tt := range tests {
 		raw, err := base64.StdEncoding.DecodeString(KnownHostsData(tt.addr, pub))

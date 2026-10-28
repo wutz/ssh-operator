@@ -1,7 +1,7 @@
 // Package naming holds the names, label keys and annotations of the sshgateway
-// operator. The integrating platform creates the sandboxes and their SSH
-// Services; this operator serves the gateway in front of them. Changing a value
-// here changes the contract with the platform.
+// operator. The integrating platform creates the backend Services and their
+// host key Secrets; this operator serves the gateway in front of them. Changing
+// a value here changes the contract with the platform.
 package naming
 
 // Labels and annotations.
@@ -13,8 +13,6 @@ const (
 	// the gateway Deployments to be recreated.
 	ManagedBy = "sshgateway"
 
-	// LabelSandbox is set on the pods of a sandbox (value = Sandbox name).
-	LabelSandbox = "sshgateway.wutz.dev/sandbox"
 	// LabelSSHGateway is set on the Pipes and the sshpiper objects of an
 	// SSHGateway (value = SSHGateway name).
 	LabelSSHGateway = "sshgateway.wutz.dev/ssh-gateway"
@@ -23,7 +21,6 @@ const (
 	// AnnotationSSHRule is the index of the SSHRoute rule a Pipe serves.
 	AnnotationSSHRule = "sshgateway.wutz.dev/ssh-rule"
 
-	ComponentSandbox    = "sandbox"
 	ComponentSSHGateway = "ssh-gateway"
 )
 
@@ -31,15 +28,12 @@ const (
 const LiteralTrue = "true"
 
 // SSHIdentitySecretName is the Secret in the gateway namespace that holds the
-// key the gateway uses to log in to sandboxes. The operator creates it on first use.
+// key the gateway uses to log in to backends. The operator creates it on first use.
 const SSHIdentitySecretName = "sshgateway-identity"
 
 // SSHHostKeySecret is the Secret of an SSH Service that holds the host key of
 // the sshd behind it. The gateway pins that key from it.
 func SSHHostKeySecret(service string) string { return service + "-hostkey" }
-
-// SSHServiceName is the Service that exposes the sshd of a sandbox.
-func SSHServiceName(sandbox string) string { return sandbox + "-ssh" }
 
 // SSHGatewayName is the name of the sshpiper Deployment, Service and
 // ConfigMap of an SSHGateway.

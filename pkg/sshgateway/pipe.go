@@ -18,10 +18,6 @@ import (
 // PipeGVK is the sshpiper Pipe kind, served by the sshpiper kubernetes plugin.
 var PipeGVK = schema.GroupVersionKind{Group: "sshpiper.com", Version: "v1beta1", Kind: "Pipe"}
 
-// SandboxUser is the login every routed connection is forwarded as. The client
-// username selects the route; inside the sandbox it is always this account.
-const SandboxUser = "sandbox"
-
 // Reasons of a route that cannot be served. They are the reasons of the
 // Accepted and ResolvedRefs conditions of the route.
 const (
@@ -47,6 +43,9 @@ type Rule struct {
 	AuthorizedKeys []string
 	// Backend is the host:port of the sshd the rule forwards to.
 	Backend string
+	// BackendUser is the account the connection is forwarded as on the backend.
+	// The client username selects the route; the backend sees this account.
+	BackendUser string
 	// HostKey is the host key of that sshd; nil when the backend has none.
 	HostKey ssh.PublicKey
 }
@@ -165,7 +164,7 @@ func pipe(namespace, gateway string, route Route, index int, rule Rule) *unstruc
 			"from": froms,
 			"to": map[string]any{
 				"host":             rule.Backend,
-				"username":         SandboxUser,
+				"username":         rule.BackendUser,
 				"known_hosts_data": KnownHostsData(rule.Backend, rule.HostKey),
 				"private_key_secret": map[string]any{
 					"name": naming.SSHIdentitySecretName,

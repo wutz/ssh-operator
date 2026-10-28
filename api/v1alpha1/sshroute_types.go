@@ -44,16 +44,20 @@ type SSHRouteMatch struct {
 
 // SSHBackendRef is the Service a matched connection is forwarded to.
 type SSHBackendRef struct {
-	// name of the Service in the route's namespace. The Secret <name>-hostkey
-	// holds the SSH host key of the sshd behind the Service; the gateway pins it.
+	// name of the Service in the route's namespace that exposes an sshd. The
+	// Secret <name>-hostkey holds the SSH host key of that sshd; the gateway pins it.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=63
 	Name string `json:"name"`
-	// port of the Service. Defaults to 22.
+	// port of the sshd behind the Service. Defaults to 22.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	// +optional
 	Port int32 `json:"port,omitempty"`
+	// username is the account the gateway logs in to the backend as. The
+	// backend must accept the platform identity key for it.
+	// +kubebuilder:validation:Pattern="^[a-z_][a-z0-9_-]{0,31}$"
+	Username string `json:"username"`
 }
 
 // SSHRouteRule forwards the connections of some usernames to a backend.
@@ -112,8 +116,8 @@ type SSHRouteStatus struct {
 // +kubebuilder:resource:shortName=sroute,categories=sshgateway
 
 // SSHRoute attaches SSH connections to a backend Service in its namespace,
-// modelled on the Gateway API routes. A member of a project creates one to
-// let an SSH client with one of the listed keys log in to a sandbox.
+// modelled on the Gateway API routes. It lets an SSH client with one of the
+// listed keys log in to the sshd behind the Service.
 type SSHRoute struct {
 	metav1.TypeMeta `json:",inline"`
 

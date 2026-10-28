@@ -29,8 +29,8 @@ import (
 	"github.com/wutz/sshgateway/pkg/sshgateway"
 )
 
-// Keys of the platform identity Secret. The gateway logs in to sandboxes with
-// the private key; sandboxes accept the public key only.
+// Keys of the platform identity Secret. The gateway logs in to backends with
+// the private key; backends accept the public key only.
 const (
 	sshPrivateKeyKey = "ssh-privatekey"
 	sshPublicKeyKey  = "ssh-publickey"
