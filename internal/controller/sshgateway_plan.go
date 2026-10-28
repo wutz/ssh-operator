@@ -31,11 +31,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	v1 "github.com/wutz/sshgateway/api/v1alpha1"
@@ -61,10 +59,6 @@ type parentVerdict struct {
 	reason  string
 	message string
 }
-
-// sandboxGVK is the kind of the agent-sandbox objects the platform creates. The
-// owner of a sandbox's SSH Service is one of them.
-var sandboxGVK = schema.GroupVersionKind{Group: "agents.x-k8s.io", Version: "v1beta1", Kind: "Sandbox"}
 
 // parentGateway is the SSHGateway a parentRef names. Gateways live in the
 // gateway namespace, which is the default.
@@ -257,27 +251,24 @@ func resolveRules(ctx context.Context, c client.Reader, route *v1.SSHRoute) ([]s
 			rule.Usernames = append(rule.Usernames, m.Username)
 		}
 		if len(r.BackendRefs) > 0 {
-			addr, key, err := resolveBackend(ctx, c, route.Namespace, r.BackendRefs[0])
+			ref := r.BackendRefs[0]
+			addr, key, err := resolveBackend(ctx, c, route.Namespace, ref)
 			if err != nil {
 				return nil, err
 			}
-			rule.Backend, rule.HostKey = addr, key
+			rule.Backend, rule.BackendUser, rule.HostKey = addr, ref.Username, key
 		}
 		rules = append(rules, rule)
 	}
 	return rules, nil
 }
 
-// resolveBackend finds the SSH Service of the sandbox ref names, in namespace,
-// and the host key the sandbox presents. Only Services owned by a sandbox are
-// backends: the gateway logs in to a backend with the platform key.
+// resolveBackend finds the Service ref names, in namespace, and the host key of
+// the sshd behind it. Any Service that exposes an sshd can be a backend.
 func resolveBackend(ctx context.Context, c client.Reader, namespace string, ref v1.SSHBackendRef) (string, ssh.PublicKey, error) {
 	svc := &corev1.Service{}
-	if err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: naming.SSHServiceName(ref.Name)}, svc); err != nil {
+	if err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: ref.Name}, svc); err != nil {
 		return "", nil, client.IgnoreNotFound(err)
-	}
-	if !ownedBySandbox(svc) {
-		return "", nil, nil
 	}
 	port := ref.Port
 	if port == 0 {
@@ -297,16 +288,6 @@ func resolveBackend(ctx context.Context, c client.Reader, namespace string, ref 
 	return addr, key, nil
 }
 
-// ownedBySandbox reports whether svc is the Service of a sandbox.
-func ownedBySandbox(svc *corev1.Service) bool {
-	for _, ref := range svc.OwnerReferences {
-		if ref.Kind == sandboxGVK.Kind && ref.APIVersion == sandboxGVK.GroupVersion().String() {
-			return true
-		}
-	}
-	return false
-}
-
 // setCondition sets one condition, keeping its transition time when the status is unchanged.
 func setSSHCondition(conds *[]metav1.Condition, generation int64, typ string, status metav1.ConditionStatus, reason, message string) {
 	meta.SetStatusCondition(conds, metav1.Condition{
@@ -314,12 +295,35 @@ func setSSHCondition(conds *[]metav1.Condition, generation int64, typ string, st
 	})
 }
 
-// sandboxBackends keeps the Services and Secrets of sandboxes: the backends and
-// host keys that routes resolve.
-func sandboxBackends() predicate.Predicate {
-	return predicate.NewPredicateFuncs(func(o client.Object) bool {
-		return o.GetLabels()[naming.LabelComponent] == naming.ComponentSandbox
-	})
+// referencesBackend reports whether a backend of route is the Service obj, or
+// the Service whose host key Secret obj is.
+func referencesBackend(route *v1.SSHRoute, obj client.Object) bool {
+	for _, r := range route.Spec.Rules {
+		for _, ref := range r.BackendRefs {
+			if ref.Name == obj.GetName() || naming.SSHHostKeySecret(ref.Name) == obj.GetName() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// backendRequests requests a reconcile of the routes in the namespace of obj
+// that name obj as a backend. obj is a Service or a host key Secret; other
+// Services and Secrets do not matter to any route.
+func backendRequests(ctx context.Context, c client.Client, obj client.Object) []reconcile.Request {
+	list := &v1.SSHRouteList{}
+	if err := c.List(ctx, list, client.InNamespace(obj.GetNamespace())); err != nil {
+		logf.FromContext(ctx).Error(err, "Failed to list SSHRoutes")
+		return nil
+	}
+	var reqs []reconcile.Request
+	for i := range list.Items {
+		if referencesBackend(&list.Items[i], obj) {
+			reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
+		}
+	}
+	return reqs
 }
 
 // gatewayRequests requests a reconcile of every SSHGateway.

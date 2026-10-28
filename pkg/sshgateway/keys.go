@@ -1,5 +1,5 @@
 // Package sshgateway holds the parts of the SSH gateway that do not touch the
-// cluster: key handling, the sshd configuration of sandboxes, and the sshpiper
+// cluster: key handling, the sshd configuration of backends, and the sshpiper
 // Pipes that route connections to them.
 package sshgateway
 

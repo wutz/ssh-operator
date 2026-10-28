@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -45,7 +44,8 @@ import (
 // sshPortName names the SSH port of sshd and of the sshpiper Service.
 const sshPortName = "ssh"
 
-// sshPort is the port sshd listens on in the sidecar of a sandbox.
+// sshPort is the port of the sshd behind a backend Service when the backend
+// names none.
 const sshPort = 22
 
 // sshpiperPluginPath runs the kubernetes plugin of sshpiper, which serves the
@@ -288,11 +288,20 @@ func (r *SSHGatewayReconciler) addresses(ctx context.Context, gw *v1alpha1.SSHGa
 }
 
 // SetupWithManager watches the gateways, the objects it owns, and what routes
-// are planned from: routes, classes, sandbox backends and namespace labels.
+// are planned from: routes, classes, backend Services and host key Secrets, and
+// namespace labels.
 func (r *SSHGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	pipe := &unstructured.Unstructured{}
 	pipe.SetGroupVersionKind(sshgateway.PipeGVK)
 	all := func(ctx context.Context, _ client.Object) []reconcile.Request {
+		return gatewayRequests(ctx, mgr.GetClient())
+	}
+	// A backend change re-plans every gateway, since a route is served by the
+	// gateways it attaches to. Objects no route names are ignored.
+	backend := func(ctx context.Context, obj client.Object) []reconcile.Request {
+		if len(backendRequests(ctx, mgr.GetClient(), obj)) == 0 {
+			return nil
+		}
 		return gatewayRequests(ctx, mgr.GetClient())
 	}
 	return ctrl.NewControllerManagedBy(mgr).
@@ -305,8 +314,8 @@ func (r *SSHGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&v1alpha1.SSHGateway{}, handler.EnqueueRequestsFromMapFunc(all)).
 		Watches(&v1alpha1.SSHGatewayClass{}, handler.EnqueueRequestsFromMapFunc(all)).
 		Watches(&v1alpha1.SSHRoute{}, handler.EnqueueRequestsFromMapFunc(all)).
-		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(all), builder.WithPredicates(sandboxBackends())).
-		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(all), builder.WithPredicates(sandboxBackends())).
+		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(backend)).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(backend)).
 		Watches(&corev1.Namespace{}, handler.EnqueueRequestsFromMapFunc(all)).
 		Complete(r)
 }

@@ -85,7 +85,7 @@ var _ = Describe("SSH gateway controller", Ordered, func() {
 			return k8sClient.Get(ctx, client.ObjectKey{Namespace: configNamespace, Name: name}, deploy)
 		}, timeout, interval).Should(Succeed())
 		args := deploy.Spec.Template.Spec.Containers[0].Args
-		// sshpiper forwards logins to sandboxes only: no forwarding of any kind.
+		// sshpiper forwards logins to backends only: no forwarding of any kind.
 		Expect(args).To(ContainElements("--disable-local-forwarding", "--disable-remote-forwarding", sshpiperPluginPath))
 		Expect(deploy.Spec.Template.Spec.SecurityContext.RunAsNonRoot).To(HaveValue(BeTrue()))
 

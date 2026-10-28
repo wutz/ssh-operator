@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -42,21 +41,14 @@ const (
 	sshNS      = "project-" + sshProject
 )
 
-// createSSHBackend creates what the platform gives an SSH sandbox: the Service
-// that selects its sshd, and the Secret with the sshd host key. The owner is a
-// Sandbox that is not created here, since the gateway only reads the reference.
+// createSSHBackend creates a backend the way a platform does: a Service that
+// exposes an sshd on port 22, and the Secret with the sshd host key. The Service
+// selects no pod; the gateway only reads the Service and its Secret.
 func createSSHBackend(name string) {
-	owner := []metav1.OwnerReference{{
-		APIVersion: "agents.x-k8s.io/v1beta1",
-		Kind:       "Sandbox",
-		Name:       name,
-		UID:        types.UID("uid-" + name),
-	}}
-	labels := map[string]string{naming.LabelComponent: naming.ComponentSandbox}
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Namespace: sshNS, Name: naming.SSHServiceName(name), Labels: labels, OwnerReferences: owner},
+		ObjectMeta: metav1.ObjectMeta{Namespace: sshNS, Name: name},
 		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{naming.LabelSandbox: name},
+			Selector: map[string]string{"app": name},
 			Ports: []corev1.ServicePort{{
 				Name: sshPortName, Port: 22, TargetPort: intstr.FromInt32(22), Protocol: corev1.ProtocolTCP,
 			}},
@@ -68,7 +60,7 @@ func createSSHBackend(name string) {
 	Expect(err).NotTo(HaveOccurred())
 	sec := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: sshNS, Name: naming.SSHHostKeySecret(svc.Name), Labels: labels, OwnerReferences: owner,
+			Namespace: sshNS, Name: naming.SSHHostKeySecret(svc.Name),
 		},
 		Data: map[string][]byte{sshgateway.SSHHostKeyKey: priv},
 	}
@@ -85,7 +77,7 @@ func newSSHRoute(name, username, backend string, keys ...string) *v1.SSHRoute {
 			Rules: []v1.SSHRouteRule{{
 				Matches:        []v1.SSHRouteMatch{{Username: username}},
 				AuthorizedKeys: keys,
-				BackendRefs:    []v1.SSHBackendRef{{Name: backend}},
+				BackendRefs:    []v1.SSHBackendRef{{Name: backend, Username: "agent"}},
 			}},
 		},
 	}
@@ -148,7 +140,7 @@ var _ = Describe("SSH route controller", Ordered, func() {
 			}, pipe)
 		}, timeout, interval).Should(Succeed())
 		host, _, _ := unstructured.NestedString(pipe.Object, "spec", "to", "host")
-		Expect(host).To(Equal("route-agent-ssh.project-ssh.svc:22"))
+		Expect(host).To(Equal("route-agent.project-ssh.svc:22"))
 		froms, _, _ := unstructured.NestedSlice(pipe.Object, "spec", "from")
 		Expect(froms).To(HaveLen(1))
 		Expect(froms[0].(map[string]any)).To(HaveKeyWithValue("username", "route-alice"))
