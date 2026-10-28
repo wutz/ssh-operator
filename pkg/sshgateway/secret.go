@@ -7,6 +7,6 @@ const (
 	SSHAuthorizedKeyKey = "authorized_keys"
 )
 
-// DefaultGatewayImage is the sshpiperd image that serves an SSHGateway when the
+// DefaultGatewayImage is the sshpiper image that serves an SSHGateway when the
 // operator is not given another one.
 const DefaultGatewayImage = "ghcr.io/tg123/sshpiperd:v1.6.1"

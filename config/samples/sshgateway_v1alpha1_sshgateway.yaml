@@ -12,7 +12,7 @@ spec:
   gatewayClassName: sshgateway
   listeners:
     - name: ssh
-      # The port sshpiperd listens on; the Service exposes the same port.
+      # The port sshpiper listens on; the Service exposes the same port.
       port: 2222
       allowedRoutes:
         # Routes of every namespace may attach; the gateway namespace is the

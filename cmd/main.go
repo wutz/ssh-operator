@@ -87,7 +87,7 @@ func main() {
 	flag.StringVar(&gatewayNamespace, "gateway-namespace", "sshgateway-system",
 		"The namespace SSHGateways are served in. It holds the SSH identity Secret.")
 	flag.StringVar(&gatewayImage, "gateway-image", sshgateway.DefaultGatewayImage,
-		"The sshpiperd image that serves an SSHGateway.")
+		"The sshpiper image that serves an SSHGateway.")
 	opts := zap.Options{
 		Development: true,
 	}
