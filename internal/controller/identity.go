@@ -25,8 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/wutz/ssh-operator/internal/naming"
-	"github.com/wutz/ssh-operator/pkg/sshgateway"
+	"github.com/wutz/sshgateway/internal/naming"
+	"github.com/wutz/sshgateway/pkg/sshgateway"
 )
 
 // Keys of the platform identity Secret. The gateway logs in to sandboxes with

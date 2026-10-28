@@ -1,18 +1,15 @@
-{{- if .Values.crd.enabled }}
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    {{- if .Values.crd.keep }}
-    "helm.sh/resource-policy": keep
-    {{- end }}
     controller-gen.kubebuilder.io/version: v0.22.0
-  name: sshgateways.forgeai.wutz.dev
+  name: sshgateways.sshgateway.wutz.dev
 spec:
-  group: forgeai.wutz.dev
+  group: sshgateway.wutz.dev
   names:
     categories:
-    - forgeai
+    - sshgateway
     kind: SSHGateway
     listKind: SSHGatewayList
     plural: sshgateways
@@ -40,7 +37,7 @@ spec:
           each connection by username to the SSHRoute that matches, and authenticates
           the client with the route's authorized keys.
 
-          Gateways live in the platform namespace. Routes attach from project
+          Gateways live in the gateway namespace. Routes attach from project
           namespaces when the listener's allowedRoutes admits them.
         properties:
           apiVersion:
@@ -276,4 +273,3 @@ spec:
     storage: true
     subresources:
       status: {}
-{{- end }}

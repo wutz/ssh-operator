@@ -1,0 +1,11 @@
+apiVersion: sshgateway.wutz.dev/v1alpha1
+kind: SSHGatewayClass
+metadata:
+  labels:
+    app.kubernetes.io/name: sshgateway
+    app.kubernetes.io/managed-by: kustomize
+  name: sshgateway
+spec:
+  # The controller name the sshgateway operator answers to. A class with another
+  # controller name is ignored.
+  controllerName: sshgateway.wutz.dev/ssh-gateway

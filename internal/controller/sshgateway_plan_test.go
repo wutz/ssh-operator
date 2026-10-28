@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	v1 "github.com/wutz/ssh-operator/api/v1alpha1"
+	v1 "github.com/wutz/sshgateway/api/v1alpha1"
 )
 
 func TestAdmits(t *testing.T) {
-	const gwNS = "forgeai-system"
+	const gwNS = "sshgateway-system"
 	all := v1.SSHListener{
 		Name:          sshPortName,
 		AllowedRoutes: &v1.AllowedRoutes{Namespaces: &v1.RouteNamespaces{From: v1.RouteNamespacesAll}},
@@ -20,8 +20,8 @@ func TestAdmits(t *testing.T) {
 		want     bool
 	}{
 		{"default admits the gateway namespace", v1.SSHListener{Name: "ssh"}, gwNS, true},
-		{"default refuses other namespaces", v1.SSHListener{Name: "ssh"}, "forge-agents", false},
-		{"all admits any namespace", all, "forge-agents", true},
+		{"default refuses other namespaces", v1.SSHListener{Name: "ssh"}, "project-agents", false},
+		{"all admits any namespace", all, "project-agents", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

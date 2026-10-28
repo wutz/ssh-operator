@@ -1,4 +1,4 @@
-# ssh-operator - AI Agent Guide
+# sshgateway - AI Agent Guide
 
 ## Project Structure
 

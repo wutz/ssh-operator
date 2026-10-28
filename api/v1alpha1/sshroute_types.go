@@ -109,7 +109,7 @@ type SSHRouteStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=sroute,categories=forgeai
+// +kubebuilder:resource:shortName=sroute,categories=sshgateway
 
 // SSHRoute attaches SSH connections to a backend Service in its namespace,
 // modelled on the Gateway API routes. A member of a project creates one to

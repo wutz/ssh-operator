@@ -1,7 +1,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "ssh-operator.name" -}}
+{{- define "sshgateway.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -10,7 +10,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "ssh-operator.fullname" -}}
+{{- define "sshgateway.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -27,7 +27,7 @@ If release name contains chart name it will be used as a full name.
 Namespace for generated references.
 Always uses the Helm release namespace.
 */}}
-{{- define "ssh-operator.namespaceName" -}}
+{{- define "sshgateway.namespaceName" -}}
 {{- .Release.Namespace }}
 {{- end }}
 
@@ -38,8 +38,8 @@ Takes a dict with:
   - .context: Template context (root context with .Values, .Release, etc.)
 Dynamically calculates safe truncation to ensure total name length <= 63 chars.
 */}}
-{{- define "ssh-operator.resourceName" -}}
-{{- $fullname := include "ssh-operator.fullname" .context }}
+{{- define "sshgateway.resourceName" -}}
+{{- $fullname := include "sshgateway.fullname" .context }}
 {{- $suffix := .suffix }}
 {{- $maxLen := sub 62 (len $suffix) | int }}
 {{- if gt (len $fullname) $maxLen }}
@@ -54,9 +54,9 @@ ServiceAccount name to use.
 When enabled, use the chart's ServiceAccount name.
 When disabled, serviceAccount.name must be set; use "default" to pick the namespace default ServiceAccount.
 */}}
-{{- define "ssh-operator.serviceAccountName" -}}
+{{- define "sshgateway.serviceAccountName" -}}
 {{- if .Values.serviceAccount.enabled }}
-{{- include "ssh-operator.resourceName" (dict "suffix" "controller-manager" "context" .) }}
+{{- include "sshgateway.resourceName" (dict "suffix" "controller-manager" "context" .) }}
 {{- else }}
 {{- required "serviceAccount.name is required when serviceAccount.enabled=false (set name: default explicitly to use the namespace default ServiceAccount)" .Values.serviceAccount.name }}
 {{- end }}

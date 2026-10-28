@@ -8,7 +8,7 @@ metadata:
 {{- if .Values.rbac.namespaced }}
   namespace: {{ .Release.Namespace }}
 {{- end }}
-  name: {{ include "ssh-operator.resourceName" (dict "suffix" "manager-role" "context" $) }}
+  name: {{ include "sshgateway.resourceName" (dict "suffix" "manager-role" "context" $) }}
 rules:
 - apiGroups:
   - ""
@@ -45,7 +45,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - forgeai.wutz.dev
+  - sshgateway.wutz.dev
   resources:
   - sshgatewayclasses
   - sshroutes
@@ -54,7 +54,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - forgeai.wutz.dev
+  - sshgateway.wutz.dev
   resources:
   - sshgateways
   verbs:
@@ -66,14 +66,14 @@ rules:
   - update
   - watch
 - apiGroups:
-  - forgeai.wutz.dev
+  - sshgateway.wutz.dev
   resources:
   - sshgateways/finalizers
   - sshroutes/finalizers
   verbs:
   - update
 - apiGroups:
-  - forgeai.wutz.dev
+  - sshgateway.wutz.dev
   resources:
   - sshgateways/status
   - sshroutes/status

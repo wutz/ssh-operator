@@ -37,9 +37,9 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	v1alpha1 "github.com/wutz/ssh-operator/api/v1alpha1"
-	"github.com/wutz/ssh-operator/internal/naming"
-	"github.com/wutz/ssh-operator/pkg/sshgateway"
+	v1alpha1 "github.com/wutz/sshgateway/api/v1alpha1"
+	"github.com/wutz/sshgateway/internal/naming"
+	"github.com/wutz/sshgateway/pkg/sshgateway"
 )
 
 // sshPortName names the SSH port of sshd and of the sshpiperd Service.
@@ -68,25 +68,25 @@ const (
 type SSHGatewayReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-	// PlatformNamespace is where the platform keeps the SSH identity and where
+	// GatewayNamespace is where the platform keeps the SSH identity and where
 	// SSHGateways are served.
-	PlatformNamespace string
+	GatewayNamespace string
 	// GatewayImage is the sshpiperd image that serves the gateways.
 	GatewayImage string
 }
 
-// +kubebuilder:rbac:groups=forgeai.wutz.dev,resources=sshgateways,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=forgeai.wutz.dev,resources=sshgateways/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=forgeai.wutz.dev,resources=sshgateways/finalizers,verbs=update
-// +kubebuilder:rbac:groups=forgeai.wutz.dev,resources=sshgatewayclasses,verbs=get;list;watch
-// +kubebuilder:rbac:groups=forgeai.wutz.dev,resources=sshroutes,verbs=get;list;watch
+// +kubebuilder:rbac:groups=sshgateway.wutz.dev,resources=sshgateways,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=sshgateway.wutz.dev,resources=sshgateways/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=sshgateway.wutz.dev,resources=sshgateways/finalizers,verbs=update
+// +kubebuilder:rbac:groups=sshgateway.wutz.dev,resources=sshgatewayclasses,verbs=get;list;watch
+// +kubebuilder:rbac:groups=sshgateway.wutz.dev,resources=sshroutes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=sshpiper.com,resources=pipes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services;serviceaccounts;secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 
-// Reconcile serves the SSHGateway if it is the one of the platform namespace,
+// Reconcile serves the SSHGateway if it is the one of the gateway namespace,
 // and writes the Deployment, Service and Pipes that serve it.
 func (r *SSHGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	gw := &v1alpha1.SSHGateway{}
@@ -120,16 +120,16 @@ func (r *SSHGatewayReconciler) program(ctx context.Context, gw *v1alpha1.SSHGate
 	log := logf.FromContext(ctx)
 	gen := gw.Generation
 
-	if gw.Namespace != r.PlatformNamespace {
-		r.reject(gw, v1alpha1.SSHReasonNotPlatformNamespace, "SSHGateways are served in the platform namespace only")
+	if gw.Namespace != r.GatewayNamespace {
+		r.reject(gw, v1alpha1.SSHReasonNotGatewayNamespace, "SSHGateways are served in the gateway namespace only")
 		return nil
 	}
-	served, err := servedGateway(ctx, r.Client, r.PlatformNamespace)
+	served, err := servedGateway(ctx, r.Client, r.GatewayNamespace)
 	if err != nil {
 		return err
 	}
 	if served == nil || served.Name != gw.Name {
-		r.reject(gw, v1alpha1.SSHReasonInvalid, "the platform namespace is served by another SSHGateway")
+		r.reject(gw, v1alpha1.SSHReasonInvalid, "the gateway namespace is served by another SSHGateway")
 		return nil
 	}
 	if len(gw.Spec.Listeners) == 0 {
@@ -138,7 +138,7 @@ func (r *SSHGatewayReconciler) program(ctx context.Context, gw *v1alpha1.SSHGate
 	}
 	listener := gw.Spec.Listeners[0]
 
-	plan, attached, err := planSSHGateway(ctx, r.Client, r.PlatformNamespace, gw)
+	plan, attached, err := planSSHGateway(ctx, r.Client, r.GatewayNamespace, gw)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (r *SSHGatewayReconciler) program(ctx context.Context, gw *v1alpha1.SSHGate
 	if err != nil {
 		return err
 	}
-	if _, err := ensureSSHIdentity(ctx, r.Client, r.PlatformNamespace); err != nil {
+	if _, err := ensureSSHIdentity(ctx, r.Client, r.GatewayNamespace); err != nil {
 		return err
 	}
 

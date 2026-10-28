@@ -9,7 +9,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	"github.com/wutz/ssh-operator/internal/naming"
+	"github.com/wutz/sshgateway/internal/naming"
 )
 
 func hostKey(t *testing.T) ssh.PublicKey {
@@ -39,7 +39,7 @@ func route(ns, name string, created time.Time, rules ...Rule) Route {
 }
 
 // testBackend is the SSH address of the backend the specs route to.
-const testBackend = "sb-ssh.forge-a.svc:22"
+const testBackend = "sb-ssh.project-a.svc:22"
 
 func TestBuildPipeForRule(t *testing.T) {
 	key := clientKey(t)
@@ -50,7 +50,7 @@ func TestBuildPipeForRule(t *testing.T) {
 		Backend:        testBackend,
 		HostKey:        host,
 	}
-	plan := Build("forgeai-system", "main", []Route{route("forge-a", "sb", time.Unix(1, 0), rule)})
+	plan := Build("sshgateway-system", "main", []Route{route("project-a", "sb", time.Unix(1, 0), rule)})
 
 	if len(plan.Problems) != 0 {
 		t.Fatalf("Problems = %v, want none", plan.Problems)
@@ -59,13 +59,13 @@ func TestBuildPipeForRule(t *testing.T) {
 		t.Fatalf("got %d pipes, want 1", len(plan.Pipes))
 	}
 	p := plan.Pipes[0]
-	if p.GetName() != "forge-a.sb.0" || p.GetNamespace() != "forgeai-system" {
-		t.Fatalf("pipe = %s/%s, want forgeai-system/forge-a.sb.0", p.GetNamespace(), p.GetName())
+	if p.GetName() != "project-a.sb.0" || p.GetNamespace() != "sshgateway-system" {
+		t.Fatalf("pipe = %s/%s, want sshgateway-system/project-a.sb.0", p.GetNamespace(), p.GetName())
 	}
 	if p.GetLabels()[naming.LabelSSHGateway] != "main" {
 		t.Errorf("gateway label = %q, want main", p.GetLabels()[naming.LabelSSHGateway])
 	}
-	if p.GetAnnotations()[naming.AnnotationSSHRoute] != "forge-a/sb" {
+	if p.GetAnnotations()[naming.AnnotationSSHRoute] != "project-a/sb" {
 		t.Errorf("route annotation = %q", p.GetAnnotations()[naming.AnnotationSSHRoute])
 	}
 
@@ -89,7 +89,7 @@ func TestBuildPipeForRule(t *testing.T) {
 	}
 	khData, _ := to["known_hosts_data"].(string)
 	khLine, err := base64.StdEncoding.DecodeString(khData)
-	if err != nil || !strings.HasPrefix(string(khLine), "sb-ssh.forge-a.svc ssh-ed25519 ") {
+	if err != nil || !strings.HasPrefix(string(khLine), "sb-ssh.project-a.svc ssh-ed25519 ") {
 		t.Errorf("known_hosts_data = %q (%v), want a base64 known_hosts line for the backend", khData, err)
 	}
 	secret, _, _ := unstructured.NestedString(to, "private_key_secret", "name")
@@ -173,7 +173,7 @@ func TestBuildUsernameFirstCreatedWins(t *testing.T) {
 
 func TestPipeNameHashesLongNames(t *testing.T) {
 	long := strings.Repeat("r", 250)
-	name := PipeName("forge-namespace-with-long-name", long, 0)
+	name := PipeName("project-namespace-with-long-name", long, 0)
 	if len(name) > 253 {
 		t.Fatalf("PipeName() has %d characters, want at most 253", len(name))
 	}

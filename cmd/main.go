@@ -35,9 +35,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"github.com/wutz/ssh-operator/api/v1alpha1"
-	"github.com/wutz/ssh-operator/internal/controller"
-	"github.com/wutz/ssh-operator/pkg/sshgateway"
+	"github.com/wutz/sshgateway/api/v1alpha1"
+	"github.com/wutz/sshgateway/internal/controller"
+	"github.com/wutz/sshgateway/pkg/sshgateway"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -63,7 +63,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	var platformNamespace, gatewayImage string
+	var gatewayNamespace, gatewayImage string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -84,8 +84,8 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.StringVar(&platformNamespace, "platform-namespace", "forgeai-system",
-		"The namespace of the forgeai platform. SSHGateways are served there, and it holds the SSH identity Secret.")
+	flag.StringVar(&gatewayNamespace, "gateway-namespace", "sshgateway-system",
+		"The namespace SSHGateways are served in. It holds the SSH identity Secret.")
 	flag.StringVar(&gatewayImage, "gateway-image", sshgateway.DefaultGatewayImage,
 		"The sshpiperd image that serves an SSHGateway.")
 	opts := zap.Options{
@@ -170,7 +170,7 @@ func main() {
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "sshoperator.wutz.dev",
+		LeaderElectionID:       "sshgateway.wutz.dev",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -195,18 +195,18 @@ func main() {
 		setupLog.Info("sshpiper Pipe CRD is not installed; the SSH gateway controllers are off")
 	} else {
 		if err := (&controller.SSHGatewayReconciler{
-			Client:            mgr.GetClient(),
-			Scheme:            mgr.GetScheme(),
-			PlatformNamespace: platformNamespace,
-			GatewayImage:      gatewayImage,
+			Client:           mgr.GetClient(),
+			Scheme:           mgr.GetScheme(),
+			GatewayNamespace: gatewayNamespace,
+			GatewayImage:     gatewayImage,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "Failed to create controller", "controller", "sshgateway")
 			os.Exit(1)
 		}
 		if err := (&controller.SSHRouteReconciler{
-			Client:            mgr.GetClient(),
-			Scheme:            mgr.GetScheme(),
-			PlatformNamespace: platformNamespace,
+			Client:           mgr.GetClient(),
+			Scheme:           mgr.GetScheme(),
+			GatewayNamespace: gatewayNamespace,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "Failed to create controller", "controller", "sshroute")
 			os.Exit(1)

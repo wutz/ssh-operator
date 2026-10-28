@@ -39,43 +39,6 @@ rules:
   - update
   - watch
 - apiGroups:
-  - forgeai.wutz.dev
-  resources:
-  - sshgatewayclasses
-  - sshroutes
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - forgeai.wutz.dev
-  resources:
-  - sshgateways
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - forgeai.wutz.dev
-  resources:
-  - sshgateways/finalizers
-  - sshroutes/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - forgeai.wutz.dev
-  resources:
-  - sshgateways/status
-  - sshroutes/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - rbac.authorization.k8s.io
   resources:
   - rolebindings
@@ -88,6 +51,43 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - sshgateway.wutz.dev
+  resources:
+  - sshgatewayclasses
+  - sshroutes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - sshgateway.wutz.dev
+  resources:
+  - sshgateways
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - sshgateway.wutz.dev
+  resources:
+  - sshgateways/finalizers
+  - sshroutes/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - sshgateway.wutz.dev
+  resources:
+  - sshgateways/status
+  - sshroutes/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - sshpiper.com
   resources:

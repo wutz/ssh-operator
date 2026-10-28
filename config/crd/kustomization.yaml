@@ -2,9 +2,9 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/forgeai.wutz.dev_sshgateways.yaml
-- bases/forgeai.wutz.dev_sshroutes.yaml
-- bases/forgeai.wutz.dev_sshgatewayclasses.yaml
+- bases/sshgateway.wutz.dev_sshgateways.yaml
+- bases/sshgateway.wutz.dev_sshroutes.yaml
+- bases/sshgateway.wutz.dev_sshgatewayclasses.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

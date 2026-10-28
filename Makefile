@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= ghcr.io/wutz/sshgateway:latest
 # YEAR defines the year value used for substituting the YEAR placeholder in the boilerplate header.
 YEAR ?= $(shell date +%Y)
 
@@ -69,7 +69,7 @@ test: manifests generate fmt vet setup-envtest ## Run tests.
 # - KUBECTL_KUBERC=true
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
-KIND_CLUSTER ?= ssh-operator-test-e2e
+KIND_CLUSTER ?= sshgateway-test-e2e
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
@@ -140,10 +140,10 @@ PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	- $(CONTAINER_TOOL) buildx create --name ssh-operator-builder
-	$(CONTAINER_TOOL) buildx use ssh-operator-builder
+	- $(CONTAINER_TOOL) buildx create --name sshgateway-builder
+	$(CONTAINER_TOOL) buildx use sshgateway-builder
 	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) $(if $(BASE_IMAGE),--build-arg BASE_IMAGE=$(BASE_IMAGE)) --tag ${IMG} -f Dockerfile.cross .
-	- $(CONTAINER_TOOL) buildx rm ssh-operator-builder
+	- $(CONTAINER_TOOL) buildx rm sshgateway-builder
 	rm Dockerfile.cross
 
 .PHONY: build-installer
@@ -264,9 +264,9 @@ endef
 ## Helm binary to use for deploying the chart
 HELM ?= helm
 ## Namespace to deploy the Helm release
-HELM_NAMESPACE ?= ssh-operator-system
+HELM_NAMESPACE ?= sshgateway-system
 ## Name of the Helm release
-HELM_RELEASE ?= ssh-operator
+HELM_RELEASE ?= sshgateway
 ## Path to the Helm chart directory
 HELM_CHART_DIR ?= charts/chart
 ## Additional arguments to pass to helm commands
@@ -312,10 +312,10 @@ HELM_OCI_REPO ?= oci://ghcr.io/wutz/charts
 CHART_VERSION ?=
 
 .PHONY: helm-lint
-helm-lint: install-helm ## Lint the Helm chart and render it with the default values and a custom platform namespace.
+helm-lint: install-helm ## Lint the Helm chart and render it with the default values and a custom gateway namespace.
 	$(HELM) lint $(HELM_CHART_DIR)
-	$(HELM) template ssh-operator $(HELM_CHART_DIR) --namespace $(HELM_NAMESPACE) >/dev/null
-	$(HELM) template ssh-operator $(HELM_CHART_DIR) --namespace $(HELM_NAMESPACE) --set platform.namespace=forge-platform >/dev/null
+	$(HELM) template sshgateway $(HELM_CHART_DIR) --namespace $(HELM_NAMESPACE) >/dev/null
+	$(HELM) template sshgateway $(HELM_CHART_DIR) --namespace $(HELM_NAMESPACE) --set gateway.namespace=gateway-other >/dev/null
 
 .PHONY: helm-package
 helm-package: install-helm ## Package the Helm chart into dist/. CHART_VERSION sets the chart and app version.
@@ -324,6 +324,6 @@ helm-package: install-helm ## Package the Helm chart into dist/. CHART_VERSION s
 		$(if $(CHART_VERSION),--version $(CHART_VERSION) --app-version $(CHART_VERSION))
 
 .PHONY: helm-push
-helm-push: install-helm ## Push dist/ssh-operator-CHART_VERSION.tgz to HELM_OCI_REPO. Log in to the registry first.
+helm-push: install-helm ## Push dist/sshgateway-CHART_VERSION.tgz to HELM_OCI_REPO. Log in to the registry first.
 	@test -n "$(CHART_VERSION)" || { echo "CHART_VERSION is required"; exit 1; }
-	$(HELM) push dist/ssh-operator-$(CHART_VERSION).tgz $(HELM_OCI_REPO)
+	$(HELM) push dist/sshgateway-$(CHART_VERSION).tgz $(HELM_OCI_REPO)

@@ -1,14 +1,14 @@
 apiVersion: v2
-name: ssh-operator
+name: sshgateway
 description: Kubernetes operator that serves SSH gateways (sshpiperd) in front of sandboxes
 type: application
 
-version: 0.1.1
-appVersion: "0.1.0"
+version: 0.2.0
+appVersion: "0.2.0"
 
-home: https://github.com/wutz/ssh-operator
+home: https://github.com/wutz/sshgateway
 sources:
-  - https://github.com/wutz/ssh-operator
+  - https://github.com/wutz/sshgateway
 keywords:
   - kubernetes
   - operator
