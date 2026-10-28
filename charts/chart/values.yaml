@@ -121,7 +121,7 @@ gateway:
 
   ## The sshpiper image that serves each SSHGateway.
   ##
-  image: ghcr.io/tg123/sshpiperd:v1.6.1
+  image: ghcr.io/tg123/sshpiperd:full-v1.6.1
 
 ## RBAC configuration
 ##

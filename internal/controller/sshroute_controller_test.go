@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"encoding/base64"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -25,9 +26,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	v1 "github.com/wutz/sshgateway/api/v1alpha1"
 	"github.com/wutz/sshgateway/internal/naming"
@@ -125,25 +126,26 @@ var _ = Describe("SSH route controller", Ordered, func() {
 		keys = pub
 	})
 
-	It("attaches a route and writes one Pipe per rule", func() {
+	It("attaches a route and writes one pipe per rule", func() {
 		route := newSSHRoute("agent-login", "route-alice", backend, keys)
 		Expect(k8sClient.Create(ctx, route)).To(Succeed())
 
 		Eventually(routeReason("agent-login", v1.SSHConditionAccepted), timeout, interval).Should(Equal(v1.SSHReasonAccepted))
 		Eventually(routeReason("agent-login", v1.SSHConditionResolvedRefs), timeout, interval).Should(Equal("ResolvedRefs"))
 
-		pipe := &unstructured.Unstructured{}
-		pipe.SetGroupVersionKind(sshgateway.PipeGVK)
-		Eventually(func() error {
-			return k8sClient.Get(ctx, client.ObjectKey{
-				Namespace: configNamespace, Name: sshgateway.PipeName(sshNS, "agent-login", 0),
-			}, pipe)
-		}, timeout, interval).Should(Succeed())
-		host, _, _ := unstructured.NestedString(pipe.Object, "spec", "to", "host")
-		Expect(host).To(Equal("route-agent.project-ssh.svc:22"))
-		froms, _, _ := unstructured.NestedSlice(pipe.Object, "spec", "from")
-		Expect(froms).To(HaveLen(1))
-		Expect(froms[0].(map[string]any)).To(HaveKeyWithValue("username", "route-alice"))
+		var pipes []sshgateway.ConfigPipe
+		Eventually(func() []sshgateway.ConfigPipe {
+			config, err := gatewayConfig()
+			if err != nil {
+				return nil
+			}
+			pipes = pipesAdmitting(config, "route-alice")
+			return pipes
+		}, timeout, interval).Should(HaveLen(1))
+		Expect(pipes[0].To.Host).To(Equal("route-agent.project-ssh.svc:22"))
+		Expect(pipes[0].To.Username).To(Equal("agent"))
+		Expect(pipes[0].From).To(HaveLen(1))
+		Expect(pipes[0].From[0].AuthorizedKeysData).To(Equal(base64.StdEncoding.EncodeToString([]byte(keys + "\n"))))
 	})
 
 	It("rejects a route whose authorized key carries options", func() {
@@ -151,10 +153,14 @@ var _ = Describe("SSH route controller", Ordered, func() {
 		Expect(k8sClient.Create(ctx, route)).To(Succeed())
 
 		Eventually(routeReason("bad-key", v1.SSHConditionAccepted), timeout, interval).Should(Equal(v1.SSHReasonInvalidAuthorizedKeys))
+		// An unreadable configuration counts as served, so the spec cannot pass on it.
 		Consistently(func() bool {
-			_, err := sshgatewayPipe(sshNS, "bad-key", 0)
-			return err != nil
-		}, 2*time.Second, interval).Should(BeTrue())
+			config, err := gatewayConfig()
+			if err != nil {
+				return true
+			}
+			return len(pipesAdmitting(config, "bad-key-user")) > 0
+		}, 2*time.Second, interval).Should(BeFalse())
 	})
 
 	It("reports a backend that does not exist", func() {
@@ -173,12 +179,30 @@ var _ = Describe("SSH route controller", Ordered, func() {
 	})
 })
 
-// sshgatewayPipe gets the Pipe of a rule of a route in the gateway namespace.
-func sshgatewayPipe(namespace, route string, rule int) (*unstructured.Unstructured, error) {
-	pipe := &unstructured.Unstructured{}
-	pipe.SetGroupVersionKind(sshgateway.PipeGVK)
-	err := k8sClient.Get(ctx, client.ObjectKey{
-		Namespace: configNamespace, Name: sshgateway.PipeName(namespace, route, rule),
-	}, pipe)
-	return pipe, err
+// gatewayConfig reads the sshpiper configuration of the platform gateway from
+// its ConfigMap.
+func gatewayConfig() (sshgateway.Config, error) {
+	cm := &corev1.ConfigMap{}
+	if err := k8sClient.Get(ctx, client.ObjectKey{
+		Namespace: configNamespace, Name: naming.SSHGatewayName(sshGatewayName),
+	}, cm); err != nil {
+		return sshgateway.Config{}, err
+	}
+	config := sshgateway.Config{}
+	err := yaml.Unmarshal([]byte(cm.Data[sshgateway.ConfigKey]), &config)
+	return config, err
+}
+
+// pipesAdmitting returns the pipes of config that admit username.
+func pipesAdmitting(config sshgateway.Config, username string) []sshgateway.ConfigPipe {
+	var out []sshgateway.ConfigPipe
+	for _, pipe := range config.Pipes {
+		for _, from := range pipe.From {
+			if from.Username == username {
+				out = append(out, pipe)
+				break
+			}
+		}
+	}
+	return out
 }

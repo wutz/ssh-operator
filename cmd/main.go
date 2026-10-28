@@ -188,29 +188,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	// The gateway is optional in the sense that it needs the sshpiper Pipe CRD:
-	// its routing table is Pipes. Without it the controllers stay off.
-	pipeGVK := sshgateway.PipeGVK
-	if _, err := mgr.GetRESTMapper().RESTMapping(pipeGVK.GroupKind(), pipeGVK.Version); err != nil {
-		setupLog.Info("sshpiper Pipe CRD is not installed; the SSH gateway controllers are off")
-	} else {
-		if err := (&controller.SSHGatewayReconciler{
-			Client:           mgr.GetClient(),
-			Scheme:           mgr.GetScheme(),
-			GatewayNamespace: gatewayNamespace,
-			GatewayImage:     gatewayImage,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "sshgateway")
-			os.Exit(1)
-		}
-		if err := (&controller.SSHRouteReconciler{
-			Client:           mgr.GetClient(),
-			Scheme:           mgr.GetScheme(),
-			GatewayNamespace: gatewayNamespace,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "sshroute")
-			os.Exit(1)
-		}
+	if err := (&controller.SSHGatewayReconciler{
+		Client:           mgr.GetClient(),
+		Scheme:           mgr.GetScheme(),
+		GatewayNamespace: gatewayNamespace,
+		GatewayImage:     gatewayImage,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "sshgateway")
+		os.Exit(1)
+	}
+	if err := (&controller.SSHRouteReconciler{
+		Client:           mgr.GetClient(),
+		Scheme:           mgr.GetScheme(),
+		GatewayNamespace: gatewayNamespace,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "sshroute")
+		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 

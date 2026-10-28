@@ -13,13 +13,8 @@ const (
 	// the gateway Deployments to be recreated.
 	ManagedBy = "sshgateway"
 
-	// LabelSSHGateway is set on the Pipes and the sshpiper objects of an
-	// SSHGateway (value = SSHGateway name).
+	// LabelSSHGateway is set on the objects of an SSHGateway (value = SSHGateway name).
 	LabelSSHGateway = "sshgateway.wutz.dev/ssh-gateway"
-	// AnnotationSSHRoute is the namespace/name of the SSHRoute a Pipe serves.
-	AnnotationSSHRoute = "sshgateway.wutz.dev/ssh-route"
-	// AnnotationSSHRule is the index of the SSHRoute rule a Pipe serves.
-	AnnotationSSHRule = "sshgateway.wutz.dev/ssh-rule"
 
 	ComponentSSHGateway = "ssh-gateway"
 )
