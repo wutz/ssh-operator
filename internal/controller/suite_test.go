@@ -49,7 +49,7 @@ const configNamespace = "sshgateway-system"
 const (
 	timeout  = 30 * time.Second
 	interval = 250 * time.Millisecond
-	// testGatewayImage is the sshpiperd image the specs' gateways run.
+	// testGatewayImage is the sshpiper image the specs' gateways run.
 	testGatewayImage = "ghcr.io/tg123/sshpiperd:v1.6.1"
 )
 

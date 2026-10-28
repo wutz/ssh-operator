@@ -42,36 +42,36 @@ import (
 	"github.com/wutz/sshgateway/pkg/sshgateway"
 )
 
-// sshPortName names the SSH port of sshd and of the sshpiperd Service.
+// sshPortName names the SSH port of sshd and of the sshpiper Service.
 const sshPortName = "ssh"
 
 // sshPort is the port sshd listens on in the sidecar of a sandbox.
 const sshPort = 22
 
-// sshpiperdPluginPath runs the kubernetes plugin of sshpiperd, which serves the
+// sshpiperPluginPath runs the kubernetes plugin of sshpiper, which serves the
 // Pipes of the namespace its ServiceAccount runs in. The image keeps the plugin
 // off PATH, so it is named by its path.
-const sshpiperdPluginPath = "/sshpiperd/plugins/kubernetes"
+const sshpiperPluginPath = "/sshpiperd/plugins/kubernetes"
 
 const (
-	// sshpiperdServerKeyDir is where the gateway's host key is mounted.
-	sshpiperdServerKeyDir = "/etc/sshpiperd"
-	// sshpiperdUID runs sshpiperd without root. The host key is group-readable
+	// sshpiperServerKeyDir is where the gateway's host key is mounted.
+	sshpiperServerKeyDir = "/etc/sshpiper"
+	// sshpiperUID runs sshpiper without root. The host key is group-readable
 	// through the fsGroup, so this user can read it.
-	sshpiperdUID int64 = 65532
-	// sshpiperdConfigVolume is the volume holding the host key.
-	sshpiperdConfigVolume = "server-key"
+	sshpiperUID int64 = 65532
+	// sshpiperConfigVolume is the volume holding the host key.
+	sshpiperConfigVolume = "server-key"
 )
 
-// SSHGatewayReconciler serves an SSHGateway with sshpiperd. The Pipes it writes
-// are sshpiperd's routing table, one per rule of each attached SSHRoute.
+// SSHGatewayReconciler serves an SSHGateway with sshpiper. The Pipes it writes
+// are sshpiper's routing table, one per rule of each attached SSHRoute.
 type SSHGatewayReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	// GatewayNamespace is where the platform keeps the SSH identity and where
 	// SSHGateways are served.
 	GatewayNamespace string
-	// GatewayImage is the sshpiperd image that serves the gateways.
+	// GatewayImage is the sshpiper image that serves the gateways.
 	GatewayImage string
 }
 
@@ -153,11 +153,11 @@ func (r *SSHGatewayReconciler) program(ctx context.Context, gw *v1alpha1.SSHGate
 	}
 
 	objs := []client.Object{
-		sshpiperdServiceAccount(gw, name),
-		sshpiperdRole(gw, name),
-		sshpiperdRoleBinding(gw, name),
-		sshpiperdService(gw, name, listener.Port),
-		sshpiperdDeployment(gw, name, r.GatewayImage, listener.Port, hostKey.Name),
+		sshpiperServiceAccount(gw, name),
+		sshpiperRole(gw, name),
+		sshpiperRoleBinding(gw, name),
+		sshpiperService(gw, name, listener.Port),
+		sshpiperDeployment(gw, name, r.GatewayImage, listener.Port, hostKey.Name),
 	}
 	for _, obj := range objs {
 		if err := controllerutil.SetControllerReference(gw, obj, r.Scheme); err != nil {
@@ -196,13 +196,13 @@ func (r *SSHGatewayReconciler) program(ctx context.Context, gw *v1alpha1.SSHGate
 	setSSHCondition(&gw.Status.Conditions, gen, v1alpha1.SSHConditionAccepted, metav1.ConditionTrue,
 		v1alpha1.SSHReasonAccepted, "the SSHGateway is served")
 	setSSHCondition(&gw.Status.Conditions, gen, v1alpha1.SSHConditionProgrammed, metav1.ConditionTrue,
-		v1alpha1.SSHReasonProgrammed, "sshpiperd is configured with the routes")
+		v1alpha1.SSHReasonProgrammed, "sshpiper is configured with the routes")
 	if deploy.Status.AvailableReplicas > 0 {
 		setSSHCondition(&gw.Status.Conditions, gen, v1alpha1.SSHConditionReady, metav1.ConditionTrue,
-			v1alpha1.SSHReasonReady, "sshpiperd accepts connections")
+			v1alpha1.SSHReasonReady, "sshpiper accepts connections")
 	} else {
 		setSSHCondition(&gw.Status.Conditions, gen, v1alpha1.SSHConditionReady, metav1.ConditionFalse,
-			v1alpha1.SSHReasonNotReady, "sshpiperd has no available replica")
+			v1alpha1.SSHReasonNotReady, "sshpiper has no available replica")
 	}
 	log.V(1).Info("Programmed SSHGateway", "sshgateway", gw.Name, "pipes", len(plan.Pipes), "routes", attached)
 	return nil
@@ -219,7 +219,7 @@ func (r *SSHGatewayReconciler) reject(gw *v1alpha1.SSHGateway, reason, message s
 		v1alpha1.SSHReasonNotReady, "the SSHGateway is not served")
 }
 
-// ensureHostKey returns the Secret holding the sshpiperd host key, generating the
+// ensureHostKey returns the Secret holding the sshpiper host key, generating the
 // key once: clients pin it, so a new key would fail them all.
 func (r *SSHGatewayReconciler) ensureHostKey(ctx context.Context, gw *v1alpha1.SSHGateway, name string) (*corev1.Secret, error) {
 	sec := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: gw.Namespace, Name: name}}
@@ -311,16 +311,16 @@ func (r *SSHGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func sshpiperdMeta(gw *v1alpha1.SSHGateway, name string) metav1.ObjectMeta {
+func sshpiperMeta(gw *v1alpha1.SSHGateway, name string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{
 		Namespace: gw.Namespace,
 		Name:      name,
-		Labels:    sshpiperdLabels(gw),
+		Labels:    sshpiperLabels(gw),
 	}
 }
 
-// sshpiperdLabels select the sshpiperd pods of gw.
-func sshpiperdLabels(gw *v1alpha1.SSHGateway) map[string]string {
+// sshpiperLabels select the sshpiper pods of gw.
+func sshpiperLabels(gw *v1alpha1.SSHGateway) map[string]string {
 	return map[string]string{
 		naming.LabelManagedBy:  naming.ManagedBy,
 		naming.LabelComponent:  naming.ComponentSSHGateway,
@@ -328,15 +328,15 @@ func sshpiperdLabels(gw *v1alpha1.SSHGateway) map[string]string {
 	}
 }
 
-func sshpiperdServiceAccount(gw *v1alpha1.SSHGateway, name string) *corev1.ServiceAccount {
-	return &corev1.ServiceAccount{ObjectMeta: sshpiperdMeta(gw, name)}
+func sshpiperServiceAccount(gw *v1alpha1.SSHGateway, name string) *corev1.ServiceAccount {
+	return &corev1.ServiceAccount{ObjectMeta: sshpiperMeta(gw, name)}
 }
 
-// sshpiperdRole lets the kubernetes plugin list the Pipes and read the platform
+// sshpiperRole lets the kubernetes plugin list the Pipes and read the platform
 // identity key, and nothing else.
-func sshpiperdRole(gw *v1alpha1.SSHGateway, name string) *rbacv1.Role {
+func sshpiperRole(gw *v1alpha1.SSHGateway, name string) *rbacv1.Role {
 	return &rbacv1.Role{
-		ObjectMeta: sshpiperdMeta(gw, name),
+		ObjectMeta: sshpiperMeta(gw, name),
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{sshgateway.PipeGVK.Group},
@@ -353,20 +353,20 @@ func sshpiperdRole(gw *v1alpha1.SSHGateway, name string) *rbacv1.Role {
 	}
 }
 
-func sshpiperdRoleBinding(gw *v1alpha1.SSHGateway, name string) *rbacv1.RoleBinding {
+func sshpiperRoleBinding(gw *v1alpha1.SSHGateway, name string) *rbacv1.RoleBinding {
 	return &rbacv1.RoleBinding{
-		ObjectMeta: sshpiperdMeta(gw, name),
+		ObjectMeta: sshpiperMeta(gw, name),
 		RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: name},
 		Subjects:   []rbacv1.Subject{{Kind: rbacv1.ServiceAccountKind, Name: name, Namespace: gw.Namespace}},
 	}
 }
 
-func sshpiperdService(gw *v1alpha1.SSHGateway, name string, port int32) *corev1.Service {
+func sshpiperService(gw *v1alpha1.SSHGateway, name string, port int32) *corev1.Service {
 	return &corev1.Service{
-		ObjectMeta: sshpiperdMeta(gw, name),
+		ObjectMeta: sshpiperMeta(gw, name),
 		Spec: corev1.ServiceSpec{
 			Type:     gw.Spec.ServiceType,
-			Selector: sshpiperdLabels(gw),
+			Selector: sshpiperLabels(gw),
 			Ports: []corev1.ServicePort{{
 				Name:       sshPortName,
 				Port:       port,
@@ -377,12 +377,12 @@ func sshpiperdService(gw *v1alpha1.SSHGateway, name string, port int32) *corev1.
 	}
 }
 
-// sshpiperdDeployment runs sshpiperd with the kubernetes plugin, which serves the
+// sshpiperDeployment runs sshpiper with the kubernetes plugin, which serves the
 // Pipes of its own namespace. It runs unprivileged, without forwarding.
-func sshpiperdDeployment(gw *v1alpha1.SSHGateway, name, image string, port int32, hostKeySecret string) *appsv1.Deployment {
-	labels := sshpiperdLabels(gw)
+func sshpiperDeployment(gw *v1alpha1.SSHGateway, name, image string, port int32, hostKeySecret string) *appsv1.Deployment {
+	labels := sshpiperLabels(gw)
 	return &appsv1.Deployment{
-		ObjectMeta: sshpiperdMeta(gw, name),
+		ObjectMeta: sshpiperMeta(gw, name),
 		Spec: appsv1.DeploymentSpec{
 			Replicas: new(int32(1)),
 			Selector: &metav1.LabelSelector{MatchLabels: labels},
@@ -392,24 +392,24 @@ func sshpiperdDeployment(gw *v1alpha1.SSHGateway, name, image string, port int32
 					ServiceAccountName: name,
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: new(true),
-						RunAsUser:    new(sshpiperdUID),
-						FSGroup:      new(sshpiperdUID),
+						RunAsUser:    new(sshpiperUID),
+						FSGroup:      new(sshpiperUID),
 					},
 					Containers: []corev1.Container{{
-						Name:  "sshpiperd",
+						Name:  "sshpiper",
 						Image: image,
 						Args: []string{
 							"--port", strconv.Itoa(int(port)),
-							"--server-key", sshpiperdServerKeyDir + "/" + sshgateway.SSHHostKeyKey,
+							"--server-key", sshpiperServerKeyDir + "/" + sshgateway.SSHHostKeyKey,
 							"--disable-local-forwarding",
 							"--disable-remote-forwarding",
 							"--log-level", "info",
-							sshpiperdPluginPath,
+							sshpiperPluginPath,
 						},
 						Ports: []corev1.ContainerPort{{Name: sshPortName, ContainerPort: port, Protocol: corev1.ProtocolTCP}},
 						VolumeMounts: []corev1.VolumeMount{{
-							Name:      sshpiperdConfigVolume,
-							MountPath: sshpiperdServerKeyDir,
+							Name:      sshpiperConfigVolume,
+							MountPath: sshpiperServerKeyDir,
 							ReadOnly:  true,
 						}},
 						SecurityContext: &corev1.SecurityContext{
@@ -418,7 +418,7 @@ func sshpiperdDeployment(gw *v1alpha1.SSHGateway, name, image string, port int32
 						},
 					}},
 					Volumes: []corev1.Volume{{
-						Name: sshpiperdConfigVolume,
+						Name: sshpiperConfigVolume,
 						VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
 							SecretName:  hostKeySecret,
 							DefaultMode: new(int32(0o440)),

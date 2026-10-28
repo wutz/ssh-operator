@@ -166,7 +166,7 @@ func ownsClass(ctx context.Context, c client.Reader, class string) (bool, error)
 }
 
 // servedGateway is the SSHGateway that serves the gateway namespace: the first
-// created of the gateways of this controller. One sshpiperd serves every Pipe
+// created of the gateways of this controller. One sshpiper serves every Pipe
 // in its namespace, so a second gateway would also serve the first one's routes.
 func servedGateway(ctx context.Context, c client.Reader, gatewayNamespace string) (*v1.SSHGateway, error) {
 	list := &v1.SSHGatewayList{}

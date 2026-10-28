@@ -119,7 +119,7 @@ type SSHGatewaySpec struct {
 	// gatewayClassName names the SSHGatewayClass that selects the controller.
 	// +kubebuilder:validation:MinLength=1
 	GatewayClassName string `json:"gatewayClassName"`
-	// listeners of the gateway. sshpiperd serves one port, so exactly one.
+	// listeners of the gateway. sshpiper serves one port, so exactly one.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=1
 	Listeners []SSHListener `json:"listeners"`
@@ -161,7 +161,7 @@ type SSHGatewayStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=='Ready')].status`
 
 // SSHGateway is a platform entry point for SSH into project pods, modelled on
-// the Gateway API Gateway. The operator runs sshpiperd for it; sshpiperd routes
+// the Gateway API Gateway. The operator runs sshpiper for it; sshpiper routes
 // each connection by username to the SSHRoute that matches, and authenticates
 // the client with the route's authorized keys.
 //

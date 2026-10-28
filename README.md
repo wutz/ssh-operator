@@ -1,8 +1,8 @@
 # sshgateway
 
 A Kubernetes operator that serves SSH gateways in front of sandboxes. An
-`SSHGateway` runs [sshpiperd](https://github.com/tg123/sshpiperd) in the
-cluster, and each `SSHRoute` rule becomes an sshpiperd `Pipe` that admits a
+`SSHGateway` runs [sshpiper](https://github.com/tg123/sshpiper) in the
+cluster, and each `SSHRoute` rule becomes an sshpiper `Pipe` that admits a
 username with the listed public keys and forwards the session to the SSH
 Service of a sandbox.
 
@@ -12,7 +12,7 @@ The API is modelled on the Gateway API: `SSHGatewayClass`, `SSHGateway` and
 ## How it works
 
 - **Gateway.** Each `SSHGateway` gets a Deployment, Service, ServiceAccount,
-  Role and RoleBinding named `sshgateway-<name>`. The sshpiperd host key is
+  Role and RoleBinding named `sshgateway-<name>`. The sshpiper host key is
   generated once and kept in the Secret `sshgateway-<name>-hostkey`; clients
   pin it.
 - **Routes.** Every rule of an `SSHRoute` becomes a sshpiper `Pipe` owned by
@@ -31,7 +31,7 @@ The API is modelled on the Gateway API: `SSHGatewayClass`, `SSHGateway` and
   `--gateway-namespace` (default `sshgateway-system`). Only one `SSHGateway` may
   serve it; a second one is rejected.
 
-Forwarding is restricted: sshpiperd runs with `--disable-local-forwarding` and
+Forwarding is restricted: sshpiper runs with `--disable-local-forwarding` and
 `--disable-remote-forwarding`, as non-root, with all capabilities dropped. Only
 key authentication is accepted; there are no passwords.
 
@@ -62,7 +62,7 @@ Values:
 |---|---|---|
 | `manager.image.repository` | `ghcr.io/wutz/sshgateway` | Operator image |
 | `gateway.namespace` | `sshgateway-system` | Namespace the gateways are served in |
-| `gateway.image` | `ghcr.io/tg123/sshpiperd:v1.6.1` | sshpiperd image of each gateway |
+| `gateway.image` | `ghcr.io/tg123/sshpiperd:v1.6.1` | sshpiper image of each gateway |
 | `crd.keep` | `true` | Keep the CRDs on uninstall |
 
 The operator's RBAC is cluster-wide (`ClusterRole`). It watches Services and
@@ -126,7 +126,7 @@ Samples are in [`config/samples`](config/samples).
 | Flag | Default | Meaning |
 |---|---|---|
 | `--gateway-namespace` | `sshgateway-system` | Namespace the gateways are served in and that holds the `sshgateway-identity` identity Secret |
-| `--gateway-image` | `ghcr.io/tg123/sshpiperd:v1.6.1` | sshpiperd image of each gateway |
+| `--gateway-image` | `ghcr.io/tg123/sshpiperd:v1.6.1` | sshpiper image of each gateway |
 | `--leader-elect` | `false` | Leader election (lease `sshgateway.wutz.dev`) |
 | `--metrics-bind-address` | `0` | Metrics endpoint; `:8443` for HTTPS |
 | `--health-probe-bind-address` | `:8081` | Health and readiness probes |
@@ -155,20 +155,6 @@ Pushing a `v<major>.<minor>.<patch>` tag runs
 
 - `ghcr.io/wutz/sshgateway:<version>` (linux/amd64 and linux/arm64)
 - `oci://ghcr.io/wutz/charts/sshgateway:<version>`
-
-## Migrating from ssh-operator 0.1.x
-
-Earlier releases were published as `ssh-operator` and served the
-`forgeai.wutz.dev` API group. This release is not an in-place upgrade:
-
-1. Uninstall the `ssh-operator` release and delete its `forgeai.wutz.dev`
-   objects (`SSHGatewayClass`, `SSHGateway`, `SSHRoute`).
-2. Install the `sshgateway` chart and recreate the objects as
-   `sshgateway.wutz.dev/v1alpha1` objects.
-3. The gateway generates a new host key, so clients that pinned the old one
-   must accept the new one.
-4. Sandboxes take the identity key from the Secret `sshgateway-identity` when
-   they are created. Recreate them so they trust that key.
 
 ## License
 

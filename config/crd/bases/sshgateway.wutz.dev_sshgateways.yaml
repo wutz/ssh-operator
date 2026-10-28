@@ -33,7 +33,7 @@ spec:
       openAPIV3Schema:
         description: |-
           SSHGateway is a platform entry point for SSH into project pods, modelled on
-          the Gateway API Gateway. The operator runs sshpiperd for it; sshpiperd routes
+          the Gateway API Gateway. The operator runs sshpiper for it; sshpiper routes
           each connection by username to the SSHRoute that matches, and authenticates
           the client with the route's authorized keys.
 
@@ -66,8 +66,8 @@ spec:
                 minLength: 1
                 type: string
               listeners:
-                description: listeners of the gateway. sshpiperd serves one port,
-                  so exactly one.
+                description: listeners of the gateway. sshpiper serves one port, so
+                  exactly one.
                 items:
                   description: SSHListener is a port the gateway accepts SSH connections
                     on.

@@ -38,7 +38,7 @@ const (
 
 // ensureSSHGateway creates the gateway class and the platform gateway that the
 // route specs attach to. Specs share one gateway: the gateway namespace is
-// served by one sshpiperd, and a second gateway there is rejected.
+// served by one sshpiper, and a second gateway there is rejected.
 func ensureSSHGateway() {
 	class := &v1.SSHGatewayClass{
 		ObjectMeta: metav1.ObjectMeta{Name: sshClassName},
@@ -76,7 +76,7 @@ func gatewayCondition(name, typ string) *metav1.Condition {
 }
 
 var _ = Describe("SSH gateway controller", Ordered, func() {
-	It("serves the platform gateway with an sshpiperd Deployment and a host key", func() {
+	It("serves the platform gateway with an sshpiper Deployment and a host key", func() {
 		ensureSSHGateway()
 		name := naming.SSHGatewayName(sshGatewayName)
 
@@ -85,8 +85,8 @@ var _ = Describe("SSH gateway controller", Ordered, func() {
 			return k8sClient.Get(ctx, client.ObjectKey{Namespace: configNamespace, Name: name}, deploy)
 		}, timeout, interval).Should(Succeed())
 		args := deploy.Spec.Template.Spec.Containers[0].Args
-		// sshpiperd forwards logins to sandboxes only: no forwarding of any kind.
-		Expect(args).To(ContainElements("--disable-local-forwarding", "--disable-remote-forwarding", sshpiperdPluginPath))
+		// sshpiper forwards logins to sandboxes only: no forwarding of any kind.
+		Expect(args).To(ContainElements("--disable-local-forwarding", "--disable-remote-forwarding", sshpiperPluginPath))
 		Expect(deploy.Spec.Template.Spec.SecurityContext.RunAsNonRoot).To(HaveValue(BeTrue()))
 
 		svc := &corev1.Service{}

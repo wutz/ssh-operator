@@ -119,7 +119,7 @@ gateway:
   ##
   namespace: sshgateway-system
 
-  ## The sshpiperd image that serves each SSHGateway.
+  ## The sshpiper image that serves each SSHGateway.
   ##
   image: ghcr.io/tg123/sshpiperd:v1.6.1
 
