@@ -1,4 +1,4 @@
-module github.com/wutz/ssh-operator
+module github.com/wutz/sshgateway
 
 go 1.26.0
 

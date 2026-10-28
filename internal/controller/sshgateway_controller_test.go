@@ -26,18 +26,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	v1 "github.com/wutz/ssh-operator/api/v1alpha1"
-	"github.com/wutz/ssh-operator/internal/naming"
-	"github.com/wutz/ssh-operator/pkg/sshgateway"
+	v1 "github.com/wutz/sshgateway/api/v1alpha1"
+	"github.com/wutz/sshgateway/internal/naming"
+	"github.com/wutz/sshgateway/pkg/sshgateway"
 )
 
 const (
-	sshClassName   = "forgeai-ssh"
+	sshClassName   = "sshgateway"
 	sshGatewayName = "main"
 )
 
 // ensureSSHGateway creates the gateway class and the platform gateway that the
-// route specs attach to. Specs share one gateway: the platform namespace is
+// route specs attach to. Specs share one gateway: the gateway namespace is
 // served by one sshpiperd, and a second gateway there is rejected.
 func ensureSSHGateway() {
 	class := &v1.SSHGatewayClass{
@@ -50,7 +50,7 @@ func ensureSSHGateway() {
 	ExpectWithOffset(1, client.IgnoreAlreadyExists(k8sClient.Create(ctx, gw))).To(Succeed())
 }
 
-// sshGatewayObject is a gateway of the platform namespace that admits routes
+// sshGatewayObject is a gateway of the gateway namespace that admits routes
 // from every namespace, as a platform operator would configure it.
 func sshGatewayObject(name string) *v1.SSHGateway {
 	return &v1.SSHGateway{
@@ -112,7 +112,7 @@ var _ = Describe("SSH gateway controller", Ordered, func() {
 		Expect(gatewayCondition(sshGatewayName, v1.SSHConditionProgrammed)).NotTo(BeNil())
 	})
 
-	It("does not serve a second gateway of the platform namespace", func() {
+	It("does not serve a second gateway of the gateway namespace", func() {
 		ensureSSHGateway()
 		second := sshGatewayObject("second")
 		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, second))).To(Succeed())

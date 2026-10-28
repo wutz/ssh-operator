@@ -38,9 +38,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	v1 "github.com/wutz/ssh-operator/api/v1alpha1"
-	"github.com/wutz/ssh-operator/internal/naming"
-	"github.com/wutz/ssh-operator/pkg/sshgateway"
+	v1 "github.com/wutz/sshgateway/api/v1alpha1"
+	"github.com/wutz/sshgateway/internal/naming"
+	"github.com/wutz/sshgateway/pkg/sshgateway"
 )
 
 // Gateways and routes are planned together. The Pipes of a gateway are the
@@ -67,9 +67,9 @@ type parentVerdict struct {
 var sandboxGVK = schema.GroupVersionKind{Group: "agents.x-k8s.io", Version: "v1beta1", Kind: "Sandbox"}
 
 // parentGateway is the SSHGateway a parentRef names. Gateways live in the
-// platform namespace, which is the default.
-func parentGateway(ref v1.ParentReference, platformNamespace string) types.NamespacedName {
-	ns := platformNamespace
+// gateway namespace, which is the default.
+func parentGateway(ref v1.ParentReference, gatewayNamespace string) types.NamespacedName {
+	ns := gatewayNamespace
 	if ref.Namespace != nil {
 		ns = *ref.Namespace
 	}
@@ -77,8 +77,8 @@ func parentGateway(ref v1.ParentReference, platformNamespace string) types.Names
 }
 
 // resolveParent works out whether route may attach to the gateway ref names.
-func resolveParent(ctx context.Context, c client.Reader, platformNamespace string, route *v1.SSHRoute, ref v1.ParentReference) (parentVerdict, error) {
-	v := parentVerdict{gateway: parentGateway(ref, platformNamespace), managed: true}
+func resolveParent(ctx context.Context, c client.Reader, gatewayNamespace string, route *v1.SSHRoute, ref v1.ParentReference) (parentVerdict, error) {
+	v := parentVerdict{gateway: parentGateway(ref, gatewayNamespace), managed: true}
 	gw := &v1.SSHGateway{}
 	if err := c.Get(ctx, v.gateway, gw); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -95,16 +95,16 @@ func resolveParent(ctx context.Context, c client.Reader, platformNamespace strin
 		return parentVerdict{}, nil
 	}
 	v.gw = gw
-	if gw.Namespace != platformNamespace {
-		v.reason, v.message = v1.SSHReasonNoMatchingParent, "SSHGateways are served in the platform namespace only"
+	if gw.Namespace != gatewayNamespace {
+		v.reason, v.message = v1.SSHReasonNoMatchingParent, "SSHGateways are served in the gateway namespace only"
 		return v, nil
 	}
-	served, err := servedGateway(ctx, c, platformNamespace)
+	served, err := servedGateway(ctx, c, gatewayNamespace)
 	if err != nil {
 		return parentVerdict{}, err
 	}
 	if served == nil || served.Name != gw.Name {
-		v.reason, v.message = v1.SSHReasonNoMatchingParent, "the platform namespace is served by another SSHGateway"
+		v.reason, v.message = v1.SSHReasonNoMatchingParent, "the gateway namespace is served by another SSHGateway"
 		return v, nil
 	}
 	if len(gw.Spec.Listeners) == 0 {
@@ -165,12 +165,12 @@ func ownsClass(ctx context.Context, c client.Reader, class string) (bool, error)
 	return sc.Spec.ControllerName == v1.SSHGatewayControllerName, nil
 }
 
-// servedGateway is the SSHGateway that serves the platform namespace: the first
+// servedGateway is the SSHGateway that serves the gateway namespace: the first
 // created of the gateways of this controller. One sshpiperd serves every Pipe
 // in its namespace, so a second gateway would also serve the first one's routes.
-func servedGateway(ctx context.Context, c client.Reader, platformNamespace string) (*v1.SSHGateway, error) {
+func servedGateway(ctx context.Context, c client.Reader, gatewayNamespace string) (*v1.SSHGateway, error) {
 	list := &v1.SSHGatewayList{}
-	if err := c.List(ctx, list, client.InNamespace(platformNamespace)); err != nil {
+	if err := c.List(ctx, list, client.InNamespace(gatewayNamespace)); err != nil {
 		return nil, err
 	}
 	slices.SortFunc(list.Items, func(a, b v1.SSHGateway) int {
@@ -197,7 +197,7 @@ func servedGateway(ctx context.Context, c client.Reader, platformNamespace strin
 
 // planSSHGateway plans the Pipes of gw from the SSHRoutes attached to it. It
 // also returns how many routes are attached.
-func planSSHGateway(ctx context.Context, c client.Reader, platformNamespace string, gw *v1.SSHGateway) (sshgateway.Plan, int32, error) {
+func planSSHGateway(ctx context.Context, c client.Reader, gatewayNamespace string, gw *v1.SSHGateway) (sshgateway.Plan, int32, error) {
 	routes := &v1.SSHRouteList{}
 	if err := c.List(ctx, routes); err != nil {
 		return sshgateway.Plan{}, 0, err
@@ -206,7 +206,7 @@ func planSSHGateway(ctx context.Context, c client.Reader, platformNamespace stri
 	var attached []sshgateway.Route
 	for i := range routes.Items {
 		route := &routes.Items[i]
-		ok, err := attaches(ctx, c, platformNamespace, route, key)
+		ok, err := attaches(ctx, c, gatewayNamespace, route, key)
 		if err != nil {
 			return sshgateway.Plan{}, 0, err
 		}
@@ -228,15 +228,15 @@ func planSSHGateway(ctx context.Context, c client.Reader, platformNamespace stri
 }
 
 // attaches reports whether route attaches to the gateway key through one of its parents.
-func attaches(ctx context.Context, c client.Reader, platformNamespace string, route *v1.SSHRoute, gateway types.NamespacedName) (bool, error) {
+func attaches(ctx context.Context, c client.Reader, gatewayNamespace string, route *v1.SSHRoute, gateway types.NamespacedName) (bool, error) {
 	if !route.DeletionTimestamp.IsZero() {
 		return false, nil
 	}
 	for _, ref := range route.Spec.ParentRefs {
-		if parentGateway(ref, platformNamespace) != gateway {
+		if parentGateway(ref, gatewayNamespace) != gateway {
 			continue
 		}
-		v, err := resolveParent(ctx, c, platformNamespace, route, ref)
+		v, err := resolveParent(ctx, c, gatewayNamespace, route, ref)
 		if err != nil {
 			return false, err
 		}

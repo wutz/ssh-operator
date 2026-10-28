@@ -1,15 +1,15 @@
-apiVersion: forgeai.wutz.dev/v1alpha1
+apiVersion: sshgateway.wutz.dev/v1alpha1
 kind: SSHRoute
 metadata:
   labels:
-    app.kubernetes.io/name: ssh-operator
+    app.kubernetes.io/name: sshgateway
     app.kubernetes.io/managed-by: kustomize
   name: agent-login
   # The namespace of the project whose sandbox this route reaches.
-  namespace: forge-demo
+  namespace: project-demo
 spec:
   parentRefs:
-    # The gateway of the platform namespace.
+    # The gateway of the gateway namespace.
     - name: main
   rules:
     - matches:

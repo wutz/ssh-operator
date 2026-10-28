@@ -16,7 +16,7 @@ manager:
   replicas: 1
 
   image:
-    repository: ghcr.io/wutz/ssh-operator
+    repository: ghcr.io/wutz/sshgateway
     ## Image tag (defaults to Chart.appVersion if not set)
     ##
     # tag: ""
@@ -111,16 +111,16 @@ manager:
   #   labels: {}
   #   annotations: {}
 
-## The forgeai platform the gateways serve.
-## SSHGateways are served in platform.namespace, which also holds the SSH identity
-## Secret the platform creates. Set it to the namespace of your forgeai install.
-##
-platform:
-  namespace: forgeai-system
-
-## The sshpiperd image that serves each SSHGateway.
+## The gateways the operator serves.
 ##
 gateway:
+  ## Namespace the SSHGateways are served in. It also holds the SSH identity
+  ## Secret the operator creates.
+  ##
+  namespace: sshgateway-system
+
+  ## The sshpiperd image that serves each SSHGateway.
+  ##
   image: ghcr.io/tg123/sshpiperd:v1.6.1
 
 ## RBAC configuration

@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/wutz/ssh-operator/internal/naming"
+	"github.com/wutz/sshgateway/internal/naming"
 )
 
 // PipeGVK is the sshpiper Pipe kind, served by the sshpiper kubernetes plugin.

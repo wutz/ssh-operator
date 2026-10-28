@@ -1,21 +1,21 @@
-apiVersion: forgeai.wutz.dev/v1alpha1
+apiVersion: sshgateway.wutz.dev/v1alpha1
 kind: SSHGateway
 metadata:
   labels:
-    app.kubernetes.io/name: ssh-operator
+    app.kubernetes.io/name: sshgateway
     app.kubernetes.io/managed-by: kustomize
-  # Gateways are served in the platform namespace only, and it is served by one
+  # Gateways are served in the gateway namespace only, and it is served by one
   # gateway: a second one there is rejected as Invalid.
   name: main
-  namespace: forgeai-system
+  namespace: sshgateway-system
 spec:
-  gatewayClassName: forgeai-ssh
+  gatewayClassName: sshgateway
   listeners:
     - name: ssh
       # The port sshpiperd listens on; the Service exposes the same port.
       port: 2222
       allowedRoutes:
-        # Routes of every namespace may attach; the platform namespace is the
+        # Routes of every namespace may attach; the gateway namespace is the
         # default when allowedRoutes is omitted.
         namespaces:
           from: All

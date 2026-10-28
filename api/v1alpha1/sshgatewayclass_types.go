@@ -22,13 +22,13 @@ import (
 )
 
 // SSHGatewayControllerName is the controllerName of the SSHGatewayClass that
-// the forgeai operator reconciles.
-const SSHGatewayControllerName = "forgeai.wutz.dev/ssh-gateway"
+// the sshgateway operator reconciles.
+const SSHGatewayControllerName = "sshgateway.wutz.dev/ssh-gateway"
 
 // SSHGatewayClassSpec defines the controller of SSHGateways.
 type SSHGatewayClassSpec struct {
 	// controllerName identifies the controller that reconciles the SSHGateways
-	// of this class, e.g. forgeai.wutz.dev/ssh-gateway.
+	// of this class, e.g. sshgateway.wutz.dev/ssh-gateway.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=253
 	ControllerName string `json:"controllerName"`
@@ -49,7 +49,7 @@ type SSHGatewayClassStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Cluster,shortName=sgc,categories=forgeai
+// +kubebuilder:resource:scope=Cluster,shortName=sgc,categories=sshgateway
 // +kubebuilder:printcolumn:name="Controller",type=string,JSONPath=`.spec.controllerName`
 // +kubebuilder:printcolumn:name="Accepted",type=string,JSONPath=`.status.conditions[?(@.type=='Accepted')].status`
 

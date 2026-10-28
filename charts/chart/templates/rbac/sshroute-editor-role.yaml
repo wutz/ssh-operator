@@ -11,13 +11,13 @@ metadata:
 {{- end }}
   labels:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ssh-operator.name" . }}
+    app.kubernetes.io/name: {{ include "sshgateway.name" . }}
     helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
     app.kubernetes.io/instance: {{ .Release.Name }}
-  name: {{ include "ssh-operator.resourceName" (dict "suffix" "sshroute-editor-role" "context" $) }}
+  name: {{ include "sshgateway.resourceName" (dict "suffix" "sshroute-editor-role" "context" $) }}
 rules:
 - apiGroups:
-  - forgeai.wutz.dev
+  - sshgateway.wutz.dev
   resources:
   - sshroutes
   verbs:
@@ -29,7 +29,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - forgeai.wutz.dev
+  - sshgateway.wutz.dev
   resources:
   - sshroutes/status
   verbs:

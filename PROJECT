@@ -10,33 +10,33 @@ plugins:
   helm.kubebuilder.io/v2-alpha:
     manifests: dist/install.yaml
     output: charts
-projectName: ssh-operator
-repo: github.com/wutz/ssh-operator
+projectName: sshgateway
+repo: github.com/wutz/sshgateway
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: wutz.dev
-  group: forgeai
+  group: sshgateway
   kind: SSHGateway
-  path: github.com/wutz/ssh-operator/api/v1alpha1
+  path: github.com/wutz/sshgateway/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: wutz.dev
-  group: forgeai
+  group: sshgateway
   kind: SSHRoute
-  path: github.com/wutz/ssh-operator/api/v1alpha1
+  path: github.com/wutz/sshgateway/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   domain: wutz.dev
-  group: forgeai
+  group: sshgateway
   kind: SSHGatewayClass
-  path: github.com/wutz/ssh-operator/api/v1alpha1
+  path: github.com/wutz/sshgateway/api/v1alpha1
   version: v1alpha1
 version: "3"

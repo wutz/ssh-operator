@@ -41,7 +41,7 @@ const (
 	SSHReasonAccepted              = "Accepted"
 	SSHReasonInvalid               = "Invalid"
 	SSHReasonGatewayClassNotFound  = "GatewayClassNotFound"
-	SSHReasonNotPlatformNamespace  = "NotPlatformNamespace"
+	SSHReasonNotGatewayNamespace   = "NotGatewayNamespace"
 	SSHReasonNoMatchingParent      = "NoMatchingParent"
 	SSHReasonNotAllowedByListeners = "NotAllowedByListeners"
 	SSHReasonInvalidAuthorizedKeys = "InvalidAuthorizedKeys"
@@ -155,7 +155,7 @@ type SSHGatewayStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=sgw,categories=forgeai
+// +kubebuilder:resource:shortName=sgw,categories=sshgateway
 // +kubebuilder:printcolumn:name="Class",type=string,JSONPath=`.spec.gatewayClassName`
 // +kubebuilder:printcolumn:name="Address",type=string,JSONPath=`.status.addresses[0]`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=='Ready')].status`
@@ -165,7 +165,7 @@ type SSHGatewayStatus struct {
 // each connection by username to the SSHRoute that matches, and authenticates
 // the client with the route's authorized keys.
 //
-// Gateways live in the platform namespace. Routes attach from project
+// Gateways live in the gateway namespace. Routes attach from project
 // namespaces when the listener's allowedRoutes admits them.
 type SSHGateway struct {
 	metav1.TypeMeta `json:",inline"`

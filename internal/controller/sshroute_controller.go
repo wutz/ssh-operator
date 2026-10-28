@@ -29,8 +29,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	v1alpha1 "github.com/wutz/ssh-operator/api/v1alpha1"
-	"github.com/wutz/ssh-operator/pkg/sshgateway"
+	v1alpha1 "github.com/wutz/sshgateway/api/v1alpha1"
+	"github.com/wutz/sshgateway/pkg/sshgateway"
 )
 
 // SSHRouteReconciler reports, for each parent gateway of an SSHRoute, whether the
@@ -39,13 +39,13 @@ import (
 type SSHRouteReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-	// PlatformNamespace is where SSHGateways are served.
-	PlatformNamespace string
+	// GatewayNamespace is where SSHGateways are served.
+	GatewayNamespace string
 }
 
-// +kubebuilder:rbac:groups=forgeai.wutz.dev,resources=sshroutes,verbs=get;list;watch
-// +kubebuilder:rbac:groups=forgeai.wutz.dev,resources=sshroutes/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=forgeai.wutz.dev,resources=sshroutes/finalizers,verbs=update
+// +kubebuilder:rbac:groups=sshgateway.wutz.dev,resources=sshroutes,verbs=get;list;watch
+// +kubebuilder:rbac:groups=sshgateway.wutz.dev,resources=sshroutes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=sshgateway.wutz.dev,resources=sshroutes/finalizers,verbs=update
 
 // Reconcile writes the status of the route on each parent gateway of this
 // controller. Statuses of other controllers are kept.
@@ -61,7 +61,7 @@ func (r *SSHRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	plans := map[types.NamespacedName]sshgateway.Plan{}
 	var ours []v1alpha1.RouteParentStatus
 	for _, ref := range route.Spec.ParentRefs {
-		v, err := resolveParent(ctx, r.Client, r.PlatformNamespace, route, ref)
+		v, err := resolveParent(ctx, r.Client, r.GatewayNamespace, route, ref)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -80,7 +80,7 @@ func (r *SSHRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		plan, ok := plans[v.gateway]
 		if !ok {
-			plan, _, err = planSSHGateway(ctx, r.Client, r.PlatformNamespace, v.gw)
+			plan, _, err = planSSHGateway(ctx, r.Client, r.GatewayNamespace, v.gw)
 			if err != nil {
 				return ctrl.Result{}, err
 			}

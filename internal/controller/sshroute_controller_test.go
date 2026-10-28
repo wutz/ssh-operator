@@ -30,16 +30,16 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	v1 "github.com/wutz/ssh-operator/api/v1alpha1"
-	"github.com/wutz/ssh-operator/internal/naming"
-	"github.com/wutz/ssh-operator/pkg/sshgateway"
+	v1 "github.com/wutz/sshgateway/api/v1alpha1"
+	"github.com/wutz/sshgateway/internal/naming"
+	"github.com/wutz/sshgateway/pkg/sshgateway"
 )
 
 // The route specs use their own project namespace: the project reconciler owns
 // the namespaces of the projects it reconciles, and this one is not a project.
 const (
 	sshProject = "ssh"
-	sshNS      = "forge-" + sshProject
+	sshNS      = "project-" + sshProject
 )
 
 // createSSHBackend creates what the platform gives an SSH sandbox: the Service
@@ -148,7 +148,7 @@ var _ = Describe("SSH route controller", Ordered, func() {
 			}, pipe)
 		}, timeout, interval).Should(Succeed())
 		host, _, _ := unstructured.NestedString(pipe.Object, "spec", "to", "host")
-		Expect(host).To(Equal("route-agent-ssh.forge-ssh.svc:22"))
+		Expect(host).To(Equal("route-agent-ssh.project-ssh.svc:22"))
 		froms, _, _ := unstructured.NestedSlice(pipe.Object, "spec", "from")
 		Expect(froms).To(HaveLen(1))
 		Expect(froms[0].(map[string]any)).To(HaveKeyWithValue("username", "route-alice"))
@@ -181,7 +181,7 @@ var _ = Describe("SSH route controller", Ordered, func() {
 	})
 })
 
-// sshgatewayPipe gets the Pipe of a rule of a route in the platform namespace.
+// sshgatewayPipe gets the Pipe of a rule of a route in the gateway namespace.
 func sshgatewayPipe(namespace, route string, rule int) (*unstructured.Unstructured, error) {
 	pipe := &unstructured.Unstructured{}
 	pipe.SetGroupVersionKind(sshgateway.PipeGVK)

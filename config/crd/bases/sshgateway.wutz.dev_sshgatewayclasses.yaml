@@ -1,18 +1,15 @@
-{{- if .Values.crd.enabled }}
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    {{- if .Values.crd.keep }}
-    "helm.sh/resource-policy": keep
-    {{- end }}
     controller-gen.kubebuilder.io/version: v0.22.0
-  name: sshgatewayclasses.forgeai.wutz.dev
+  name: sshgatewayclasses.sshgateway.wutz.dev
 spec:
-  group: forgeai.wutz.dev
+  group: sshgateway.wutz.dev
   names:
     categories:
-    - forgeai
+    - sshgateway
     kind: SSHGatewayClass
     listKind: SSHGatewayClassList
     plural: sshgatewayclasses
@@ -58,7 +55,7 @@ spec:
               controllerName:
                 description: |-
                   controllerName identifies the controller that reconciles the SSHGateways
-                  of this class, e.g. forgeai.wutz.dev/ssh-gateway.
+                  of this class, e.g. sshgateway.wutz.dev/ssh-gateway.
                 maxLength: 253
                 minLength: 1
                 type: string
@@ -140,4 +137,3 @@ spec:
     storage: true
     subresources:
       status: {}
-{{- end }}

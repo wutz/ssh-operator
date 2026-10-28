@@ -4,14 +4,14 @@ kind: NetworkPolicy
 metadata:
   labels:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ include "ssh-operator.name" . }}
-  name: {{ include "ssh-operator.resourceName" (dict "suffix" "allow-metrics-traffic" "context" $) }}
+    app.kubernetes.io/name: {{ include "sshgateway.name" . }}
+  name: {{ include "sshgateway.resourceName" (dict "suffix" "allow-metrics-traffic" "context" $) }}
   namespace: {{ .Release.Namespace }}
 spec:
   podSelector:
     matchLabels:
       control-plane: controller-manager
-      app.kubernetes.io/name: {{ include "ssh-operator.name" . }}
+      app.kubernetes.io/name: {{ include "sshgateway.name" . }}
   policyTypes:
     - Ingress
   ingress:

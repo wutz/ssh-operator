@@ -25,7 +25,7 @@ import (
 )
 
 // fieldOwner is the field manager of the objects this operator applies.
-const fieldOwner = client.FieldOwner("ssh-operator")
+const fieldOwner = client.FieldOwner("sshgateway")
 
 // apply server-side applies obj (typed or unstructured) as the operator's field owner.
 func apply(ctx context.Context, c client.Client, obj client.Object) error {

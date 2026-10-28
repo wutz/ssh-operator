@@ -1,18 +1,15 @@
-{{- if .Values.crd.enabled }}
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    {{- if .Values.crd.keep }}
-    "helm.sh/resource-policy": keep
-    {{- end }}
     controller-gen.kubebuilder.io/version: v0.22.0
-  name: sshroutes.forgeai.wutz.dev
+  name: sshroutes.sshgateway.wutz.dev
 spec:
-  group: forgeai.wutz.dev
+  group: sshgateway.wutz.dev
   names:
     categories:
-    - forgeai
+    - sshgateway
     kind: SSHRoute
     listKind: SSHRouteList
     plural: sshroutes
@@ -252,4 +249,3 @@ spec:
     storage: true
     subresources:
       status: {}
-{{- end }}

@@ -37,14 +37,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	v1 "github.com/wutz/ssh-operator/api/v1alpha1"
+	v1 "github.com/wutz/sshgateway/api/v1alpha1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-// configNamespace is the platform namespace the gateway is served in.
-const configNamespace = "forgeai-system"
+// configNamespace is the gateway namespace the gateway is served in.
+const configNamespace = "sshgateway-system"
 
 const (
 	timeout  = 30 * time.Second
@@ -109,9 +109,9 @@ var _ = BeforeSuite(func() {
 	for _, r := range []interface{ SetupWithManager(ctrl.Manager) error }{
 		&SSHGatewayReconciler{
 			Client: mgr.GetClient(), Scheme: mgr.GetScheme(),
-			PlatformNamespace: configNamespace, GatewayImage: testGatewayImage,
+			GatewayNamespace: configNamespace, GatewayImage: testGatewayImage,
 		},
-		&SSHRouteReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), PlatformNamespace: configNamespace},
+		&SSHRouteReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), GatewayNamespace: configNamespace},
 	} {
 		Expect(r.SetupWithManager(mgr)).To(Succeed())
 	}

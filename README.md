@@ -1,4 +1,4 @@
-# ssh-operator
+# sshgateway
 
 A Kubernetes operator that serves SSH gateways in front of sandboxes. An
 `SSHGateway` runs [sshpiperd](https://github.com/tg123/sshpiperd) in the
@@ -7,9 +7,7 @@ username with the listed public keys and forwards the session to the SSH
 Service of a sandbox.
 
 The API is modelled on the Gateway API: `SSHGatewayClass`, `SSHGateway` and
-`SSHRoute`. The API group is `forgeai.wutz.dev/v1alpha1`, kept from the
-[ForgeAI](https://github.com/wutz/forgeai) platform this operator was split
-from, so existing manifests and platform code keep working.
+`SSHRoute`. The API group is `sshgateway.wutz.dev/v1alpha1`.
 
 ## How it works
 
@@ -25,12 +23,12 @@ from, so existing manifests and platform code keep working.
   The host key the sandbox presents is read from the Secret
   `<sandbox>-ssh-hostkey` (key `ssh_host_ed25519_key`), and the gateway pins it.
 - **Login to sandboxes.** The gateway logs in to a sandbox as user `sandbox`
-  with the platform identity key. The Secret `forgeai-ssh` in the platform
+  with the identity key. The Secret `sshgateway-identity` in the gateway
   namespace holds the key pair (`ssh-privatekey`, `ssh-publickey`). The
   operator creates it when it is missing; the sandbox must accept
   `ssh-publickey`.
-- **Platform namespace.** Gateways are served in one namespace, set by
-  `--platform-namespace` (default `forgeai-system`). Only one `SSHGateway` may
+- **Gateway namespace.** Gateways are served in one namespace, set by
+  `--gateway-namespace` (default `sshgateway-system`). Only one `SSHGateway` may
   serve it; a second one is rejected.
 
 Forwarding is restricted: sshpiperd runs with `--disable-local-forwarding` and
@@ -43,26 +41,27 @@ key authentication is accepted; there are no passwords.
   installed. The CRD is in [`internal/controller/testdata/crds/pipes.sshpiper.com.yaml`](internal/controller/testdata/crds/pipes.sshpiper.com.yaml).
   Without it the operator starts, logs `sshpiper Pipe CRD is not installed; the
   SSH gateway controllers are off`, and leaves gateways and routes without status.
-- Backends are created by the platform (for ForgeAI, sandboxes of the
-  agent-sandbox controller with an sshd sidecar on port 22).
+- Backends are created by the integrating platform. Its sandboxes are
+  agent-sandbox `Sandbox` objects, each with an sshd on port 22 behind the
+  `<sandbox>-ssh` Service.
 
 ## Install
 
 The chart is published as an OCI artifact:
 
 ```bash
-helm install ssh-operator oci://ghcr.io/wutz/charts/ssh-operator \
-  --version 0.1.0 \
-  --namespace ssh-operator-system --create-namespace \
-  --set platform.namespace=forgeai-system
+helm install sshgateway oci://ghcr.io/wutz/charts/sshgateway \
+  --version 0.2.0 \
+  --namespace sshgateway-system --create-namespace \
+  --set gateway.namespace=sshgateway-system
 ```
 
 Values:
 
 | Value | Default | Meaning |
 |---|---|---|
-| `manager.image.repository` | `ghcr.io/wutz/ssh-operator` | Operator image |
-| `platform.namespace` | `forgeai-system` | Namespace the gateways are served in |
+| `manager.image.repository` | `ghcr.io/wutz/sshgateway` | Operator image |
+| `gateway.namespace` | `sshgateway-system` | Namespace the gateways are served in |
 | `gateway.image` | `ghcr.io/tg123/sshpiperd:v1.6.1` | sshpiperd image of each gateway |
 | `crd.keep` | `true` | Keep the CRDs on uninstall |
 
@@ -73,20 +72,20 @@ in the gateway's namespace.
 ## Usage
 
 ```yaml
-apiVersion: forgeai.wutz.dev/v1alpha1
+apiVersion: sshgateway.wutz.dev/v1alpha1
 kind: SSHGatewayClass
 metadata:
-  name: forgeai-ssh
+  name: sshgateway
 spec:
-  controllerName: forgeai.wutz.dev/ssh-gateway
+  controllerName: sshgateway.wutz.dev/ssh-gateway
 ---
-apiVersion: forgeai.wutz.dev/v1alpha1
+apiVersion: sshgateway.wutz.dev/v1alpha1
 kind: SSHGateway
 metadata:
   name: main
-  namespace: forgeai-system
+  namespace: sshgateway-system
 spec:
-  gatewayClassName: forgeai-ssh
+  gatewayClassName: sshgateway
   listeners:
     - name: ssh
       port: 2222
@@ -95,11 +94,11 @@ spec:
           from: All
   serviceType: ClusterIP
 ---
-apiVersion: forgeai.wutz.dev/v1alpha1
+apiVersion: sshgateway.wutz.dev/v1alpha1
 kind: SSHRoute
 metadata:
   name: agent-login
-  namespace: forge-demo
+  namespace: project-demo
 spec:
   parentRefs:
     - name: main
@@ -126,9 +125,9 @@ Samples are in [`config/samples`](config/samples).
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--platform-namespace` | `forgeai-system` | Namespace the gateways are served in and that holds the `forgeai-ssh` identity Secret |
+| `--gateway-namespace` | `sshgateway-system` | Namespace the gateways are served in and that holds the `sshgateway-identity` identity Secret |
 | `--gateway-image` | `ghcr.io/tg123/sshpiperd:v1.6.1` | sshpiperd image of each gateway |
-| `--leader-elect` | `false` | Leader election (lease `sshoperator.wutz.dev`) |
+| `--leader-elect` | `false` | Leader election (lease `sshgateway.wutz.dev`) |
 | `--metrics-bind-address` | `0` | Metrics endpoint; `:8443` for HTTPS |
 | `--health-probe-bind-address` | `:8081` | Health and readiness probes |
 
@@ -140,10 +139,10 @@ make manifests generate    # regenerate CRDs, RBAC and deepcopy after editing *_
 make test                  # unit and controller tests (envtest: real API server and etcd)
 make lint                  # golangci-lint
 make run                   # run the operator against the current kubeconfig
-make docker-build IMG=ghcr.io/wutz/ssh-operator:dev
-make deploy IMG=ghcr.io/wutz/ssh-operator:dev   # Kustomize install
+make docker-build IMG=ghcr.io/wutz/sshgateway:dev
+make deploy IMG=ghcr.io/wutz/sshgateway:dev   # Kustomize install
 make helm-lint             # lint and render the chart
-make helm-package CHART_VERSION=0.1.0           # package into dist/
+make helm-package CHART_VERSION=0.2.0         # package into dist/
 ```
 
 `make test-e2e` runs the end-to-end tests against a dedicated
@@ -154,8 +153,22 @@ make helm-package CHART_VERSION=0.1.0           # package into dist/
 Pushing a `v<major>.<minor>.<patch>` tag runs
 [`.github/workflows/release.yml`](.github/workflows/release.yml), which publishes:
 
-- `ghcr.io/wutz/ssh-operator:<version>` (linux/amd64 and linux/arm64)
-- `oci://ghcr.io/wutz/charts/ssh-operator:<version>`
+- `ghcr.io/wutz/sshgateway:<version>` (linux/amd64 and linux/arm64)
+- `oci://ghcr.io/wutz/charts/sshgateway:<version>`
+
+## Migrating from ssh-operator 0.1.x
+
+Earlier releases were published as `ssh-operator` and served the
+`forgeai.wutz.dev` API group. This release is not an in-place upgrade:
+
+1. Uninstall the `ssh-operator` release and delete its `forgeai.wutz.dev`
+   objects (`SSHGatewayClass`, `SSHGateway`, `SSHRoute`).
+2. Install the `sshgateway` chart and recreate the objects as
+   `sshgateway.wutz.dev/v1alpha1` objects.
+3. The gateway generates a new host key, so clients that pinned the old one
+   must accept the new one.
+4. Sandboxes take the identity key from the Secret `sshgateway-identity` when
+   they are created. Recreate them so they trust that key.
 
 ## License
 
